@@ -1,11 +1,12 @@
 use crate::token::{Operator, Pos, Sym, Symbol, Token};
 use nom::branch::alt;
+use nom::bytes::complete::take_while1;
 use nom::character::complete::{char, multispace0};
 use nom::character::one_of;
-use nom::combinator::{fail, opt, success};
+use nom::combinator::{fail, map, opt, success};
 use nom::error::{Error, context};
 use nom::sequence::delimited;
-use nom::{IResult, Parser, combinator};
+use nom::{AsChar, IResult, Parser, combinator};
 // pub fn next_token(pos: Pos) -> IResult<Pos, Token> {
 //     let (pos, _) = take_while(|c: char| c.is_ascii_whitespace())(pos)?;
 //     let (_, is_eof) = map(opt(eof), |res| res.is_some()).parse(pos)?;
@@ -71,7 +72,14 @@ fn parse_token<'a>() -> impl Parser<Pos<'a>, Output = Token<'a>> {
 }
 
 fn token(input: Pos) -> IResult<Pos, Token> {
-    alt((eof, symbol, operator)).parse(input)
+    alt((
+        eof,
+        symbol,
+        operator,
+        id,
+        context("invalid character", fail()),
+    ))
+    .parse(input)
 }
 
 fn eof(input: Pos) -> IResult<Pos, Token> {
@@ -149,4 +157,13 @@ fn operator_2(input: Pos) -> IResult<Pos, Token> {
             col: input.get_column() as u32,
         })
         .parse(input)
+}
+
+fn id(input: Pos) -> IResult<Pos, Token> {
+    map(take_while1(AsChar::is_alpha), |value: Pos| Token {
+        sym: Sym::Id(value.fragment()),
+        line: value.location_line(),
+        col: input.get_column() as u32,
+    })
+    .parse(input)
 }
