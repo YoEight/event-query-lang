@@ -1,71 +1,12 @@
 use crate::token::{Operator, Pos, Sym, Symbol, Token};
 use nom::branch::alt;
-use nom::bytes::complete::take_while1;
-use nom::character::complete::{char, multispace0};
-use nom::character::one_of;
-use nom::combinator::{fail, map, opt, success};
+use nom::character::complete::{alpha1, alphanumeric0, char, multispace0};
+use nom::character::{digit1, one_of};
+use nom::combinator::{fail, map, opt, recognize};
 use nom::error::{Error, context};
-use nom::sequence::delimited;
-use nom::{AsChar, IResult, Parser, combinator};
-// pub fn next_token(pos: Pos) -> IResult<Pos, Token> {
-//     let (pos, _) = take_while(|c: char| c.is_ascii_whitespace())(pos)?;
-//     let (_, is_eof) = map(opt(eof), |res| res.is_some()).parse(pos)?;
-//
-//     if is_eof {
-//         return Ok((pos, Token::new(Sym::Eof, pos, "")));
-//     }
-//
-//     let (pos, c) = peek(anychar).parse(pos)?;
-//
-//     if matches!(c, '(' | ')' | '.' | ',' | ':' | '[' | ']' | '{' | '}') {
-//         return map(take(1usize), |v| Token::new(Sym::Symbol, v)).parse(pos);
-//     }
-//
-//     if matches!(c, '+' | '-' | '*' | '/' | '=' | '^') {
-//         return map(take(1usize), |v| Token::new(Sym::Operator, v)).parse(pos);
-//     }
-//
-//     if matches!(c, '<' | '>') {
-//         let (tmp, _) = anychar(pos)?;
-//         let (_, ok) = opt(char('=')).parse(tmp)?;
-//
-//         let parser = if ok.is_some() {
-//             take(2usize)
-//         } else {
-//             take(1usize)
-//         };
-//
-//         return map(parser, |v| Token::new(Sym::Operator, v)).parse(pos);
-//     }
-//
-//     if matches!(c, '!') {
-//         let (pos, _) = anychar(pos)?;
-//         let (_, ok) = opt(char('=')).parse(pos)?;
-//
-//         if ok.is_some() {
-//             failure("invalid symbol '='", pos)?;
-//         }
-//
-//         return Ok((pos, Token::new(Sym::Operator, pos, "!")));
-//     }
-//
-//     if c.is_ascii_alphabetic() {
-//         return map(take_while(AsChar::is_alpha), |v| Token::new(Sym::Id, v)).parse(pos);
-//     }
-//
-//     if c.is_ascii_digit() {
-//         return map(take_while(AsChar::is_dec_digit), |v| {
-//             Token::new(Sym::Integer, v)
-//         })
-//         .parse(pos);
-//     }
-//
-//     failure("unexpected character", pos)
-// }
-
-// fn failure<'a>(reason: &'static str, pos: Pos<'a>) -> IResult<Pos<'a>, Token<'a>> {
-//     context(reason, fail()).parse(pos)
-// }
+use nom::number::double;
+use nom::sequence::{delimited, pair};
+use nom::{IResult, Parser, combinator};
 
 fn parse_token<'a>() -> impl Parser<Pos<'a>, Output = Token<'a>> {
     delimited(multispace0, token, multispace0)
@@ -76,7 +17,8 @@ fn token(input: Pos) -> IResult<Pos, Token> {
         eof,
         symbol,
         operator,
-        id,
+        ident,
+        number,
         context("invalid character", fail()),
     ))
     .parse(input)
@@ -159,10 +101,26 @@ fn operator_2(input: Pos) -> IResult<Pos, Token> {
         .parse(input)
 }
 
-fn id(input: Pos) -> IResult<Pos, Token> {
-    map(take_while1(AsChar::is_alpha), |value: Pos| Token {
-        sym: Sym::Id(value.fragment()),
-        line: value.location_line(),
+fn ident(input: Pos) -> IResult<Pos, Token> {
+    recognize(pair(alpha1, alphanumeric0))
+        .map(|value: Pos| Token {
+            sym: Sym::Id(value.fragment()),
+            line: value.location_line(),
+            col: value.get_column() as u32,
+        })
+        .parse(input)
+}
+
+fn number(input: Pos) -> IResult<Pos, Token> {
+    alt((
+        map(double(), |value| Sym::Float(value)),
+        map(digit1(), |value: Pos| {
+            Sym::Integer(value.fragment().parse().unwrap())
+        }),
+    ))
+    .map(|sym| Token {
+        sym,
+        line: input.location_line(),
         col: input.get_column() as u32,
     })
     .parse(input)
