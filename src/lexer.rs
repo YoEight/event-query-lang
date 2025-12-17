@@ -1,26 +1,35 @@
 use crate::token::{Operator, Sym, Symbol, Text, Token};
 use nom::branch::alt;
 use nom::character::complete::{alpha1, alphanumeric0, char, multispace0};
-use nom::character::{digit1, one_of};
-use nom::combinator::{fail, map, opt, recognize};
+use nom::character::one_of;
+use nom::combinator::{fail, opt, recognize};
 use nom::error::{context, Error};
-use nom::number::double;
+use nom::number::complete::double;
 use nom::sequence::{delimited, pair};
-use nom::{combinator, IResult, Parser};
+use nom::{IResult, Parser};
 
 pub fn parse_tokens(input: &str) -> Result<Vec<Token<'_>>, nom::Err<Error<Text<'_>>>> {
     let mut input = Text::new(input);
     let mut tokens = Vec::new();
 
     loop {
-        let (remaining, token) = token(input)?;
+        let token = if input.fragment().is_empty() {
+            Token {
+                sym: Sym::Eof,
+                line: input.location_line(),
+                col: input.get_column() as u32,
+            }
+        } else {
+            let (remaining, token) = token(input)?;
+            input = remaining;
+            token
+        };
+
         tokens.push(token);
 
         if matches!(token.sym, Sym::Eof) {
             break;
         }
-
-        input = remaining;
     }
 
     Ok(tokens)
@@ -30,7 +39,6 @@ fn token(input: Text) -> IResult<Text, Token> {
     delimited(
         multispace0,
         alt((
-            eof,
             symbol,
             operator,
             ident,
@@ -40,16 +48,6 @@ fn token(input: Text) -> IResult<Text, Token> {
         multispace0,
     )
     .parse(input)
-}
-
-fn eof(input: Text) -> IResult<Text, Token> {
-    (combinator::eof::<_, Error<Text>>)
-        .map(|pos| Token {
-            sym: Sym::Eof,
-            line: pos.location_line(),
-            col: pos.get_column() as u32,
-        })
-        .parse(input)
 }
 
 fn symbol(input: Text) -> IResult<Text, Token> {
@@ -130,16 +128,11 @@ fn ident(input: Text) -> IResult<Text, Token> {
 }
 
 fn number(input: Text) -> IResult<Text, Token> {
-    alt((
-        map(double(), |value| Sym::Float(value)),
-        map(digit1(), |value: Text| {
-            Sym::Integer(value.fragment().parse().unwrap())
-        }),
-    ))
-    .map(|sym| Token {
-        sym,
-        line: input.location_line(),
-        col: input.get_column() as u32,
-    })
-    .parse(input)
+    double
+        .map(|value| Token {
+            sym: Sym::Number(value),
+            line: input.location_line(),
+            col: input.get_column() as u32,
+        })
+        .parse(input)
 }

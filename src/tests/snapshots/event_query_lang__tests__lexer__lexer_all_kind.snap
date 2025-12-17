@@ -1,6 +1,6 @@
 ---
 source: src/tests/lexer.rs
-expression: tokens
+expression: "parse_tokens(\"foo != 123(]{.:\").unwrap()"
 ---
 - sym:
     Id: foo
@@ -11,7 +11,7 @@ expression: tokens
   line: 1
   col: 5
 - sym:
-    Float: 123
+    Number: 123
   line: 1
   col: 8
 - sym:

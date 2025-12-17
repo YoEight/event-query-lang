@@ -1,0 +1,15 @@
+---
+source: src/tests/lexer.rs
+expression: "parse_tokens(\"-123.456\").unwrap()"
+---
+- sym:
+    Operator: Sub
+  line: 1
+  col: 1
+- sym:
+    Number: 123.456
+  line: 1
+  col: 2
+- sym: Eof
+  line: 1
+  col: 9

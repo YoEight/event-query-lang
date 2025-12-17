@@ -4,8 +4,7 @@ use serde::Serialize;
 #[derive(Clone, Debug, Copy, Serialize)]
 pub enum Sym<'a> {
     Id(&'a str),
-    Integer(i64),
-    Float(f64),
+    Number(f64),
     Keyword(&'a str),
     Operator(Operator),
     Symbol(Symbol),
