@@ -8,7 +8,7 @@ use nom::number::complete::double;
 use nom::sequence::{delimited, pair};
 use nom::{IResult, Parser};
 
-pub fn parse_tokens(input: &str) -> Result<Vec<Token<'_>>, nom::Err<Error<Text<'_>>>> {
+pub fn tokenize(input: &str) -> Result<Vec<Token<'_>>, nom::Err<Error<Text<'_>>>> {
     let mut input = Text::new(input);
     let mut tokens = Vec::new();
 
