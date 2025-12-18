@@ -4,6 +4,7 @@ use serde::Serialize;
 #[derive(Clone, Debug, Copy, Serialize)]
 pub enum Sym<'a> {
     Id(&'a str),
+    String(&'a str),
     Number(f64),
     Keyword(&'a str),
     Operator(Operator),
@@ -25,7 +26,7 @@ pub enum Operator {
     Gte,
 }
 
-#[derive(Clone, Debug, Copy, Serialize)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Serialize)]
 pub enum Symbol {
     OpenParen,
     CloseParen,

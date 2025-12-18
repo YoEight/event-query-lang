@@ -1,6 +1,6 @@
 use std::num::{ParseFloatError, ParseIntError};
 
-use crate::token::Token;
+use crate::token::{Symbol, Token};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -25,4 +25,6 @@ pub enum LexerError {
 pub enum ParserError<'a> {
     ExpectedIdent(Token<'a>),
     ExpectedKeyword(&'static str, Token<'a>),
+    ExpectedSymbol(Symbol, Token<'a>),
+    UnexpectedToken(Token<'a>),
 }

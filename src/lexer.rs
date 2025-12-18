@@ -1,5 +1,6 @@
 use crate::token::{Operator, Sym, Symbol, Text, Token};
 use nom::branch::alt;
+use nom::bytes::complete::take_while;
 use nom::character::complete::{alpha1, alphanumeric0, char, multispace0};
 use nom::character::one_of;
 use nom::combinator::{eof, fail, opt, recognize};
@@ -35,6 +36,7 @@ fn token(input: Text) -> IResult<Text, Token> {
             operator,
             ident,
             number,
+            string,
             context("invalid character", fail()),
         )),
         multispace0,
@@ -132,6 +134,16 @@ fn number(input: Text) -> IResult<Text, Token> {
     double
         .map(|value| Token {
             sym: Sym::Number(value),
+            line: input.location_line(),
+            col: input.get_column() as u32,
+        })
+        .parse(input)
+}
+
+fn string(input: Text) -> IResult<Text, Token> {
+    delimited(char('"'), take_while(|c| c != '"'), char('"'))
+        .map(|value: Text| Token {
+            sym: Sym::String(value.fragment()),
             line: input.location_line(),
             col: input.get_column() as u32,
         })
