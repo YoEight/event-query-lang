@@ -1,5 +1,6 @@
 use std::num::{ParseFloatError, ParseIntError};
 
+use crate::token::Token;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -18,4 +19,10 @@ pub enum LexerError {
 
     #[error("string literal is not closed properly")]
     StringLiteralNotClosed,
+}
+
+#[derive(Debug)]
+pub enum ParserError<'a> {
+    ExpectedIdent(Token<'a>),
+    ExpectedKeyword(&'static str, Token<'a>),
 }
