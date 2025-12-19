@@ -1,10 +1,19 @@
-use crate::token::Operator;
+use crate::token::{Operator, Token};
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct Pos {
     pub line: u32,
     pub col: u32,
+}
+
+impl From<Token<'_>> for Pos {
+    fn from(value: Token<'_>) -> Self {
+        Self {
+            line: value.line,
+            col: value.col,
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Serialize)]
@@ -25,6 +34,16 @@ pub struct Attrs {
     pub tpe: Type,
 }
 
+impl Attrs {
+    pub fn new(pos: Pos, scope: u64) -> Self {
+        Self {
+            pos,
+            scope,
+            tpe: Type::Unspecified,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Expr<'a> {
     pub attrs: Attrs,
@@ -39,7 +58,7 @@ pub struct Access<'a> {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct App<'a> {
-    pub func: Box<Expr<'a>>,
+    pub func: &'a str,
     pub args: Vec<Expr<'a>>,
 }
 
@@ -51,9 +70,9 @@ pub struct Field<'a> {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Binary<'a> {
-    pub left: Box<Expr<'a>>,
+    pub lhs: Box<Expr<'a>>,
     pub operator: Operator,
-    pub right: Box<Expr<'a>>,
+    pub rhs: Box<Expr<'a>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -74,6 +93,7 @@ pub enum Value<'a> {
     App(App<'a>),
     Binary(Binary<'a>),
     Unary(Unary<'a>),
+    Group(Box<Expr<'a>>),
 }
 
 #[derive(Debug, Clone, Serialize)]

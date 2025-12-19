@@ -1,17 +1,22 @@
-use crate::ast::{Query, Source, SourceKind};
+use crate::ast::{App, Attrs, Binary, Expr, Query, Source, SourceKind, Unary, Value};
 use crate::error::ParserError;
-use crate::token::{Sym, Symbol, Token};
+use crate::token::{Operator, Sym, Symbol, Token};
 
 pub type ParseResult<'a, A> = Result<A, ParserError<'a>>;
 
 struct Parser<'a> {
     input: &'a [Token<'a>],
     offset: usize,
+    scope: u64,
 }
 
 impl<'a> Parser<'a> {
     fn new(input: &'a [Token<'a>]) -> Self {
-        Self { input, offset: 0 }
+        Self {
+            input,
+            offset: 0,
+            scope: 1,
+        }
     }
 
     fn peek<'b>(&'b self) -> Token<'a> {
@@ -54,16 +59,150 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_source<'b>(&'b mut self) -> ParseResult<'a, Source<'a>> {
-        let token = self.shift();
-        expect_keyword(token, "from")?;
+        expect_keyword(self.shift(), "from")?;
         let binding = self.parse_ident()?;
-        expect_keyword(token, "in")?;
+        expect_keyword(self.shift(), "in")?;
         let kind = self.parse_source_kind()?;
 
         Ok(Source { binding, kind })
     }
 
+    fn parse_where_clause<'b>(&mut self) -> ParseResult<'a, Expr<'a>> {
+        expect_keyword(self.shift(), "where")?;
+        self.parse_expr()
+    }
+
+    fn parse_expr<'b>(&'b mut self) -> ParseResult<'a, Expr<'a>> {
+        let token = self.peek();
+
+        match token.sym {
+            Sym::Eof => Err(ParserError::UnexpectedEof),
+
+            Sym::Id(_)
+            | Sym::String(_)
+            | Sym::Number(_)
+            | Sym::Symbol(Symbol::OpenParen | Symbol::OpenBracket)
+            | Sym::Operator(Operator::Add | Operator::Sub) => self.parse_binary(0),
+
+            _ => Err(ParserError::UnexpectedToken(token)),
+        }
+    }
+
+    fn parse_primary<'b>(&'b mut self) -> ParseResult<'a, Expr<'a>> {
+        let token = self.shift();
+
+        let value = match token.sym {
+            Sym::Id(name) => {
+                if name.eq_ignore_ascii_case("true") {
+                    Value::Bool(true)
+                } else if name.eq_ignore_ascii_case("false") {
+                    Value::Bool(false)
+                } else {
+                    if matches!(self.peek().sym, Sym::Symbol(Symbol::OpenParen)) {
+                        self.shift();
+
+                        let mut args = vec![];
+
+                        if !matches!(self.peek().sym, Sym::Symbol(Symbol::CloseParen)) {
+                            args.push(self.parse_expr()?);
+
+                            while matches!(self.peek().sym, Sym::Symbol(Symbol::Comma)) {
+                                self.shift();
+                                args.push(self.parse_expr()?);
+                            }
+                        }
+
+                        expect_symbol(self.shift(), Symbol::CloseParen)?;
+
+                        Value::App(App { func: name, args })
+                    } else {
+                        Value::Id(name)
+                    }
+                }
+            }
+
+            Sym::String(s) => Value::String(s),
+            Sym::Number(n) => Value::Number(n),
+
+            Sym::Symbol(Symbol::OpenParen) => {
+                let expr = self.parse_expr()?;
+                expect_symbol(self.shift(), Symbol::CloseParen)?;
+
+                Value::Group(Box::new(expr))
+            }
+
+            Sym::Symbol(Symbol::OpenBracket) => {
+                let mut elems = vec![];
+
+                if !matches!(self.peek().sym, Sym::Symbol(Symbol::CloseBracket)) {
+                    elems.push(self.parse_expr()?);
+
+                    while matches!(self.peek().sym, Sym::Symbol(Symbol::Comma)) {
+                        self.shift();
+                        elems.push(self.parse_expr()?);
+                    }
+                }
+
+                expect_symbol(self.shift(), Symbol::CloseBracket)?;
+
+                Value::Array(elems)
+            }
+
+            Sym::Operator(op) if matches!(op, Operator::Add | Operator::Sub) => {
+                Value::Unary(Unary {
+                    operator: op,
+                    expr: Box::new(self.parse_expr()?),
+                })
+            }
+
+            _ => return Err(ParserError::UnexpectedToken(token)),
+        };
+
+        Ok(Expr {
+            attrs: Attrs::new(token.into(), self.scope),
+            value,
+        })
+    }
+
+    fn parse_binary<'b>(&'b mut self, min_bind: u64) -> ParseResult<'a, Expr<'a>> {
+        let mut lhs = self.parse_primary()?;
+
+        loop {
+            let token = self.peek();
+            if matches!(token.sym, Sym::Eof | Sym::Symbol(Symbol::CloseParen)) {
+                break;
+            }
+
+            let operator = if let Sym::Operator(op) = token.sym {
+                op
+            } else {
+                return Err(ParserError::ExpectedOperator(token));
+            };
+
+            let (lhs_bind, rhs_bind) = binding_pow(operator);
+
+            if lhs_bind < min_bind {
+                break;
+            }
+
+            self.shift();
+            let rhs = self.parse_binary(rhs_bind)?;
+
+            lhs = Expr {
+                attrs: lhs.attrs,
+                value: Value::Binary(Binary {
+                    lhs: Box::new(lhs),
+                    operator,
+                    rhs: Box::new(rhs),
+                }),
+            };
+        }
+
+        Ok(lhs)
+    }
+
     fn parse_query<'b>(&'b mut self) -> ParseResult<'a, Query<'a>> {
+        self.scope += 1;
         let mut sources = vec![];
 
         while let Sym::Id(name) = self.peek().sym
@@ -75,9 +214,10 @@ impl<'a> Parser<'a> {
         if let Sym::Id(name) = self.peek().sym
             && name.eq_ignore_ascii_case("where")
         {
-            todo!("parse where clause")
+            self.parse_where_clause()?;
         }
 
+        self.scope -= 1;
         todo!()
     }
 }
@@ -102,6 +242,16 @@ fn expect_symbol(token: Token, expect: Symbol) -> ParseResult<()> {
     Err(ParserError::ExpectedSymbol(expect, token))
 }
 
-pub fn parse<'a>(input: &[Token<'a>]) -> ParseResult<'a, ()> {
-    Ok(())
+fn binding_pow(op: Operator) -> (u64, u64) {
+    match op {
+        Operator::Add | Operator::Sub => (10, 11),
+        Operator::Mul | Operator::Div => (20, 21),
+        _ => (1, 2),
+    }
+}
+
+pub fn parse<'a>(input: &'a [Token<'a>]) -> ParseResult<'a, Query<'a>> {
+    let mut parser = Parser::new(input);
+
+    parser.parse_query()
 }
