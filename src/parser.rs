@@ -49,7 +49,7 @@ impl<'a> Parser<'a> {
     fn parse_source_kind<'b>(&'b mut self) -> ParseResult<'a, SourceKind<'a>> {
         let token = self.shift();
         match token.sym {
-            Sym::Id(id) if id.eq_ignore_ascii_case("events") => Ok(SourceKind::Events),
+            Sym::Id(id) => Ok(SourceKind::Name(id)),
             Sym::String(sub) => Ok(SourceKind::Subject(sub)),
             Sym::Symbol(sym) if matches!(sym, Symbol::OpenParen) => {
                 let query = self.parse_query()?;

@@ -1,6 +1,6 @@
 ---
 source: src/tests/lexer.rs
-expression: "parse_tokens(\"foo != 123(]{.:\").unwrap()"
+expression: "tokenize(\"foo != 123(]{.:\").unwrap()"
 ---
 - sym:
     Id: foo
@@ -15,7 +15,7 @@ expression: "parse_tokens(\"foo != 123(]{.:\").unwrap()"
   line: 1
   col: 8
 - sym:
-    Symbol: OpenBrace
+    Symbol: OpenParen
   line: 1
   col: 11
 - sym:

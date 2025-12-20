@@ -104,7 +104,7 @@ pub struct Source<'a> {
 
 #[derive(Debug, Clone, Serialize)]
 pub enum SourceKind<'a> {
-    Events,
+    Name(&'a str),
     Subject(&'a str),
     Subquery(Query<'a>),
 }
