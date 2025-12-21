@@ -5,7 +5,7 @@ use crate::ast::{
 use crate::error::ParserError;
 use crate::token::{Operator, Sym, Symbol, Token};
 
-pub type ParseResult<'a, A> = Result<A, ParserError<'a>>;
+pub type ParseResult<A> = Result<A, ParserError>;
 
 struct Parser<'a> {
     input: &'a [Token<'a>],
@@ -36,32 +36,40 @@ impl<'a> Parser<'a> {
         res
     }
 
-    fn parse_ident<'b>(&'b mut self) -> ParseResult<'a, &'a str> {
+    fn parse_ident(&mut self) -> ParseResult<String> {
         let token = self.shift();
 
         if let Sym::Id(id) = token.sym {
-            return Ok(id);
+            return Ok(id.to_owned());
         }
 
-        Err(ParserError::ExpectedIdent(token))
+        Err(ParserError::ExpectedIdent(
+            token.line,
+            token.col,
+            token.sym.to_string(),
+        ))
     }
 
-    fn parse_source_kind<'b>(&'b mut self) -> ParseResult<'a, SourceKind<'a>> {
+    fn parse_source_kind(&mut self) -> ParseResult<SourceKind> {
         let token = self.shift();
         match token.sym {
-            Sym::Id(id) => Ok(SourceKind::Name(id)),
-            Sym::String(sub) => Ok(SourceKind::Subject(sub)),
+            Sym::Id(id) => Ok(SourceKind::Name(id.to_owned())),
+            Sym::String(sub) => Ok(SourceKind::Subject(sub.to_owned())),
             Sym::Symbol(sym) if matches!(sym, Symbol::OpenParen) => {
                 let query = self.parse_query()?;
                 expect_symbol(self.shift(), Symbol::CloseParen)?;
 
                 Ok(SourceKind::Subquery(query))
             }
-            _ => Err(ParserError::UnexpectedToken(token)),
+            _ => Err(ParserError::UnexpectedToken(
+                token.line,
+                token.col,
+                token.sym.to_string(),
+            )),
         }
     }
 
-    fn parse_source<'b>(&'b mut self) -> ParseResult<'a, Source<'a>> {
+    fn parse_source(&mut self) -> ParseResult<Source> {
         expect_keyword(self.shift(), "from")?;
         let binding = self.parse_ident()?;
         expect_keyword(self.shift(), "in")?;
@@ -70,19 +78,19 @@ impl<'a> Parser<'a> {
         Ok(Source { binding, kind })
     }
 
-    fn parse_where_clause<'b>(&'b mut self) -> ParseResult<'a, Expr<'a>> {
+    fn parse_where_clause(&mut self) -> ParseResult<Expr> {
         expect_keyword(self.shift(), "where")?;
         self.parse_expr()
     }
 
-    fn parse_group_by<'b>(&'b mut self) -> ParseResult<'a, Expr<'a>> {
+    fn parse_group_by(&mut self) -> ParseResult<Expr> {
         expect_keyword(self.shift(), "group")?;
         expect_keyword(self.shift(), "by")?;
 
         self.parse_expr()
     }
 
-    fn parse_order_by<'b>(&'b mut self) -> ParseResult<'a, OrderBy<'a>> {
+    fn parse_order_by(&mut self) -> ParseResult<OrderBy> {
         expect_keyword(self.shift(), "order")?;
         expect_keyword(self.shift(), "by")?;
 
@@ -95,21 +103,31 @@ impl<'a> Parser<'a> {
             } else if name.eq_ignore_ascii_case("desc") {
                 Order::Desc
             } else {
-                return Err(ParserError::UnexpectedToken(token));
+                return Err(ParserError::UnexpectedToken(
+                    token.line,
+                    token.col,
+                    name.to_owned(),
+                ));
             };
 
             return Ok(OrderBy { expr, order });
         }
 
-        Err(ParserError::UnexpectedToken(token))
+        Err(ParserError::UnexpectedToken(
+            token.line,
+            token.col,
+            token.sym.to_string(),
+        ))
     }
 
-    fn parse_limit<'b>(&'b mut self) -> ParseResult<'a, Limit> {
+    fn parse_limit(&mut self) -> ParseResult<Limit> {
         let token = self.shift();
         let limit = expect_keyword(token, "top")
             .map(|_| "top")
             .or_else(|_| expect_keyword(token, "skip").map(|_| "skip"))
-            .map_err(|_| ParserError::UnexpectedToken(token))?;
+            .map_err(|_| {
+                ParserError::UnexpectedToken(token.line, token.col, token.sym.to_string())
+            })?;
 
         let token = self.shift();
         if let Sym::Number(value) = token.sym
@@ -122,10 +140,14 @@ impl<'a> Parser<'a> {
             };
         }
 
-        Err(ParserError::UnexpectedToken(token))
+        Err(ParserError::UnexpectedToken(
+            token.line,
+            token.col,
+            token.sym.to_string(),
+        ))
     }
 
-    fn parse_expr<'b>(&'b mut self) -> ParseResult<'a, Expr<'a>> {
+    fn parse_expr(&mut self) -> ParseResult<Expr> {
         let token = self.peek();
 
         match token.sym {
@@ -137,11 +159,15 @@ impl<'a> Parser<'a> {
             | Sym::Symbol(Symbol::OpenParen | Symbol::OpenBracket | Symbol::OpenBrace)
             | Sym::Operator(Operator::Add | Operator::Sub | Operator::Not) => self.parse_binary(0),
 
-            _ => Err(ParserError::UnexpectedToken(token)),
+            _ => Err(ParserError::UnexpectedToken(
+                token.line,
+                token.col,
+                token.sym.to_string(),
+            )),
         }
     }
 
-    fn parse_primary<'b>(&'b mut self) -> ParseResult<'a, Expr<'a>> {
+    fn parse_primary(&mut self) -> ParseResult<Expr> {
         let token = self.shift();
 
         let value = match token.sym {
@@ -167,13 +193,16 @@ impl<'a> Parser<'a> {
 
                         expect_symbol(self.shift(), Symbol::CloseParen)?;
 
-                        Value::App(App { func: name, args })
+                        Value::App(App {
+                            func: name.to_owned(),
+                            args,
+                        })
                     } else if matches!(self.peek().sym, Sym::Symbol(Symbol::Dot)) {
                         self.shift();
                         let mut access = Access {
                             target: Box::new(Expr {
                                 attrs: Attrs::new(token.into(), self.scope),
-                                value: Value::Id(name),
+                                value: Value::Id(name.to_owned()),
                             }),
                             field: self.parse_ident()?,
                         };
@@ -191,12 +220,12 @@ impl<'a> Parser<'a> {
 
                         Value::Access(access)
                     } else {
-                        Value::Id(name)
+                        Value::Id(name.to_owned())
                     }
                 }
             }
 
-            Sym::String(s) => Value::String(s),
+            Sym::String(s) => Value::String(s.to_owned()),
             Sym::Number(n) => Value::Number(n),
 
             Sym::Symbol(Symbol::OpenParen) => {
@@ -256,7 +285,13 @@ impl<'a> Parser<'a> {
                 })
             }
 
-            _ => return Err(ParserError::UnexpectedToken(token)),
+            _ => {
+                return Err(ParserError::UnexpectedToken(
+                    token.line,
+                    token.col,
+                    token.sym.to_string(),
+                ));
+            }
         };
 
         Ok(Expr {
@@ -265,7 +300,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_binary<'b>(&'b mut self, min_bind: u64) -> ParseResult<'a, Expr<'a>> {
+    fn parse_binary(&mut self, min_bind: u64) -> ParseResult<Expr> {
         let mut lhs = self.parse_primary()?;
 
         loop {
@@ -298,7 +333,7 @@ impl<'a> Parser<'a> {
         Ok(lhs)
     }
 
-    fn parse_query<'b>(&'b mut self) -> ParseResult<'a, Query<'a>> {
+    fn parse_query(&mut self) -> ParseResult<Query> {
         self.scope += 1;
         let scope = self.scope;
 
@@ -362,14 +397,19 @@ impl<'a> Parser<'a> {
     }
 }
 
-fn expect_keyword<'a, 'b>(token: Token<'a>, keyword: &'static str) -> ParseResult<'a, ()> {
+fn expect_keyword(token: Token, keyword: &'static str) -> ParseResult<()> {
     if let Sym::Id(id) = token.sym
         && id.eq_ignore_ascii_case(keyword)
     {
         return Ok(());
     }
 
-    Err(ParserError::ExpectedKeyword(keyword, token))
+    Err(ParserError::ExpectedKeyword(
+        token.line,
+        token.col,
+        keyword,
+        token.sym.to_string(),
+    ))
 }
 
 fn expect_symbol(token: Token, expect: Symbol) -> ParseResult<()> {
@@ -379,7 +419,12 @@ fn expect_symbol(token: Token, expect: Symbol) -> ParseResult<()> {
         return Ok(());
     }
 
-    Err(ParserError::ExpectedSymbol(expect, token))
+    Err(ParserError::ExpectedSymbol(
+        token.line,
+        token.col,
+        expect,
+        token.sym.to_string(),
+    ))
 }
 
 fn binding_pow(op: Operator) -> (u64, u64) {
@@ -396,7 +441,7 @@ fn binding_pow(op: Operator) -> (u64, u64) {
     }
 }
 
-pub fn parse<'a>(input: &'a [Token<'a>]) -> ParseResult<'a, Query<'a>> {
+pub fn parse<'a>(input: &'a [Token<'a>]) -> ParseResult<Query> {
     let mut parser = Parser::new(input);
 
     parser.parse_query()

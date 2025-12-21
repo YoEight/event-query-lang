@@ -1,55 +1,38 @@
-use crate::token::{Symbol, Token};
-use std::fmt::{Display, Formatter};
+use crate::token::Symbol;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum Error<'a> {
-    #[error("{0}")]
-    Parser(ParserError<'a>),
+pub enum Error {
+    #[error(transparent)]
+    Lexer(LexerError),
+
+    #[error(transparent)]
+    Parser(ParserError),
 }
 
-#[derive(Debug)]
-pub enum ParserError<'a> {
-    ExpectedIdent(Token<'a>),
-    ExpectedKeyword(&'static str, Token<'a>),
-    ExpectedSymbol(Symbol, Token<'a>),
-    UnexpectedToken(Token<'a>),
+#[derive(Debug, Error)]
+pub enum LexerError {
+    #[error("unexpected end of input")]
+    IncompleteInput,
+
+    #[error("{0}:{1}: invalid character")]
+    InvalidSymbol(u32, u32),
+}
+
+#[derive(Debug, Error)]
+pub enum ParserError {
+    #[error("{0}:{1}: expected identifier but got {2}")]
+    ExpectedIdent(u32, u32, String),
+
+    #[error("{0}:{1}: expected keyword {2} but got {3}")]
+    ExpectedKeyword(u32, u32, &'static str, String),
+
+    #[error("{0}:{1}: expected {2} but got {3}")]
+    ExpectedSymbol(u32, u32, Symbol, String),
+
+    #[error("{0}:{1}: unexpected token {2}")]
+    UnexpectedToken(u32, u32, String),
+
+    #[error("unexpected end of file")]
     UnexpectedEof,
-}
-
-impl Display for ParserError<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParserError::ExpectedIdent(t) => {
-                write!(
-                    f,
-                    "{}:{}: expected identifier, but got {}",
-                    t.line, t.col, t.sym
-                )
-            }
-
-            ParserError::ExpectedKeyword(k, t) => {
-                write!(
-                    f,
-                    "{}:{}: expected keyword {}, but got {}",
-                    k.to_uppercase(),
-                    t.line,
-                    t.col,
-                    t.sym
-                )
-            }
-
-            ParserError::ExpectedSymbol(s, t) => {
-                write!(f, "{}:{}: expected {}, but got {}", s, t.line, t.col, t.sym)
-            }
-
-            ParserError::UnexpectedToken(t) => {
-                write!(f, "{}:{}: unexpected token {}", t.line, t.col, t.sym)
-            }
-
-            ParserError::UnexpectedEof => {
-                write!(f, "unexpected end of file")
-            }
-        }
-    }
 }

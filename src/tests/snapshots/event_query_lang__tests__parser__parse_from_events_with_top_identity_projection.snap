@@ -10,7 +10,8 @@ attrs:
   tpe: Unspecified
 sources:
   - binding: e
-    kind: Events
+    kind:
+      Name: events
 predicate: ~
 group_by: ~
 order_by:

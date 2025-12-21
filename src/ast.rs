@@ -45,73 +45,73 @@ impl Attrs {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Expr<'a> {
+pub struct Expr {
     pub attrs: Attrs,
-    pub value: Value<'a>,
+    pub value: Value,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Access<'a> {
-    pub target: Box<Expr<'a>>,
-    pub field: &'a str,
+pub struct Access {
+    pub target: Box<Expr>,
+    pub field: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct App<'a> {
-    pub func: &'a str,
-    pub args: Vec<Expr<'a>>,
+pub struct App {
+    pub func: String,
+    pub args: Vec<Expr>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Field<'a> {
-    pub name: &'a str,
-    pub value: Expr<'a>,
+pub struct Field {
+    pub name: String,
+    pub value: Expr,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Binary<'a> {
-    pub lhs: Box<Expr<'a>>,
+pub struct Binary {
+    pub lhs: Box<Expr>,
     pub operator: Operator,
-    pub rhs: Box<Expr<'a>>,
+    pub rhs: Box<Expr>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Unary<'a> {
+pub struct Unary {
     pub operator: Operator,
-    pub expr: Box<Expr<'a>>,
+    pub expr: Box<Expr>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub enum Value<'a> {
+pub enum Value {
     Number(f64),
-    String(&'a str),
+    String(String),
     Bool(bool),
-    Id(&'a str),
-    Array(Vec<Expr<'a>>),
-    Record(Vec<Field<'a>>),
-    Access(Access<'a>),
-    App(App<'a>),
-    Binary(Binary<'a>),
-    Unary(Unary<'a>),
-    Group(Box<Expr<'a>>),
+    Id(String),
+    Array(Vec<Expr>),
+    Record(Vec<Field>),
+    Access(Access),
+    App(App),
+    Binary(Binary),
+    Unary(Unary),
+    Group(Box<Expr>),
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Source<'a> {
-    pub binding: &'a str,
-    pub kind: SourceKind<'a>,
+pub struct Source {
+    pub binding: String,
+    pub kind: SourceKind,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub enum SourceKind<'a> {
-    Name(&'a str),
-    Subject(&'a str),
-    Subquery(Query<'a>),
+pub enum SourceKind {
+    Name(String),
+    Subject(String),
+    Subquery(Query),
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct OrderBy<'a> {
-    pub expr: Expr<'a>,
+pub struct OrderBy {
+    pub expr: Expr,
     pub order: Order,
 }
 
@@ -128,12 +128,12 @@ pub enum Limit {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Query<'a> {
+pub struct Query {
     pub attrs: Attrs,
-    pub sources: Vec<Source<'a>>,
-    pub predicate: Option<Expr<'a>>,
-    pub group_by: Option<Expr<'a>>,
-    pub order_by: Option<OrderBy<'a>>,
+    pub sources: Vec<Source>,
+    pub predicate: Option<Expr>,
+    pub group_by: Option<Expr>,
+    pub order_by: Option<OrderBy>,
     pub limit: Option<Limit>,
-    pub projection: Expr<'a>,
+    pub projection: Expr,
 }

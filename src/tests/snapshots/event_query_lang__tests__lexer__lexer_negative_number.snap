@@ -1,6 +1,6 @@
 ---
 source: src/tests/lexer.rs
-expression: "parse_tokens(\"-123.456\").unwrap()"
+expression: "tokenize(\"-123.456\").unwrap()"
 ---
 - sym:
     Operator: Sub

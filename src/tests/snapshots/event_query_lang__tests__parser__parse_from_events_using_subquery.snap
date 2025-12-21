@@ -20,7 +20,8 @@ sources:
           tpe: Unspecified
         sources:
           - binding: e
-            kind: Events
+            kind:
+              Name: events
         predicate:
           attrs:
             pos:

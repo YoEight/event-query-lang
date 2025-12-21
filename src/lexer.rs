@@ -1,15 +1,13 @@
 use crate::token::{Operator, Sym, Symbol, Text, Token};
 use nom::branch::alt;
-use nom::bytes::complete::{tag_no_case, take_while};
+use nom::bytes::complete::take_while;
 use nom::character::complete::{alpha1, alphanumeric0, char, multispace0};
 use nom::character::one_of;
-use nom::combinator::{eof, fail, opt, recognize};
+use nom::combinator::{eof, opt, recognize};
 use nom::error::{context, Error};
 use nom::number::complete::double;
 use nom::sequence::{delimited, pair};
 use nom::{IResult, Parser};
-
-// type IResult<'a, A, B> = nom::IResult<A, B, nom::error::In<Text<'a>>>;
 
 pub fn tokenize(input: &str) -> Result<Vec<Token<'_>>, nom::Err<Error<Text<'_>>>> {
     let mut input = Text::new(input);
@@ -32,15 +30,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token<'_>>, nom::Err<Error<Text<'_>>>
 fn token(input: Text) -> IResult<Text, Token> {
     delimited(
         multispace0,
-        alt((
-            end_of_file,
-            symbol,
-            operator,
-            ident,
-            number,
-            string,
-            context("invalid character", fail()),
-        )),
+        alt((end_of_file, symbol, operator, ident, number, string)),
         multispace0,
     )
     .parse(input)
@@ -78,7 +68,7 @@ fn end_of_file(input: Text) -> IResult<Text, Token> {
 }
 
 fn operator(input: Text) -> IResult<Text, Token> {
-    alt((operator_1, operator_2, logical)).parse(input)
+    alt((operator_1, operator_2)).parse(input)
 }
 
 fn operator_1(input: Text) -> IResult<Text, Token> {
@@ -122,27 +112,26 @@ fn operator_2(input: Text) -> IResult<Text, Token> {
         .parse(input)
 }
 
-fn logical(input: Text) -> IResult<Text, Token> {
-    alt((
-        tag_no_case("and").map(|_| Operator::And),
-        tag_no_case("or").map(|_| Operator::Or),
-        tag_no_case("xor").map(|_| Operator::Xor),
-        tag_no_case("not").map(|_| Operator::Not),
-    ))
-    .map(move |op| Token {
-        sym: Sym::Operator(op),
-        line: input.location_line(),
-        col: input.get_column() as u32,
-    })
-    .parse(input)
-}
-
 fn ident(input: Text) -> IResult<Text, Token> {
     recognize(pair(alpha1, alphanumeric0))
-        .map(|value: Text| Token {
-            sym: Sym::Id(value.fragment()),
-            line: value.location_line(),
-            col: value.get_column() as u32,
+        .map(|value: Text| {
+            let sym = if value.fragment().eq_ignore_ascii_case("and") {
+                Sym::Operator(Operator::And)
+            } else if value.fragment().eq_ignore_ascii_case("or") {
+                Sym::Operator(Operator::Or)
+            } else if value.fragment().eq_ignore_ascii_case("xor") {
+                Sym::Operator(Operator::Xor)
+            } else if value.fragment().eq_ignore_ascii_case("not") {
+                Sym::Operator(Operator::Not)
+            } else {
+                Sym::Id(value.fragment())
+            };
+
+            Token {
+                sym,
+                line: value.location_line(),
+                col: value.get_column() as u32,
+            }
         })
         .parse(input)
 }
