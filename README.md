@@ -62,9 +62,5 @@ EventSourcingDB is an event store database that provides a powerful query langua
 
 MIT
 
-## Author
-
-Yorick Laupa <yo.eight@gmail.com>
-
 [EventSourcingDB]: https://www.thenativeweb.io/products/eventsourcingdb
 [The EventQL Reference]: https://docs.eventsourcingdb.io/reference/eventql/
