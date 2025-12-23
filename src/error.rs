@@ -20,6 +20,10 @@ pub enum Error {
     /// Error during syntactic analysis (parsing).
     #[error(transparent)]
     Parser(ParserError),
+
+    /// Error during static analysis.
+    #[error(transparent)]
+    Analysis(AnalysisError),
 }
 
 /// Errors that can occur during lexical analysis.
@@ -82,3 +86,6 @@ pub enum ParserError {
     #[error("unexpected end of file")]
     UnexpectedEof,
 }
+
+#[derive(Debug, Error)]
+pub enum AnalysisError {}

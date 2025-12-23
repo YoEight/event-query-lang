@@ -7,13 +7,15 @@
 //! # Main Function
 //!
 //! - [`parse`] - Convert a slice of tokens into a Query AST
-use crate::GroupBy;
+use std::marker::PhantomData;
+
 use crate::ast::{
     Access, App, Attrs, Binary, Expr, Field, Limit, Order, OrderBy, Query, Source, SourceKind,
     Unary, Value,
 };
 use crate::error::ParserError;
 use crate::token::{Operator, Sym, Symbol, Token};
+use crate::{GroupBy, Raw};
 
 /// Result type for parser operations.
 ///
@@ -63,7 +65,7 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_source_kind(&mut self) -> ParseResult<SourceKind> {
+    fn parse_source_kind(&mut self) -> ParseResult<SourceKind<Raw>> {
         let token = self.shift();
         match token.sym {
             Sym::Id(id) => Ok(SourceKind::Name(id.to_owned())),
@@ -82,7 +84,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_source(&mut self) -> ParseResult<Source> {
+    fn parse_source(&mut self) -> ParseResult<Source<Raw>> {
         expect_keyword(self.shift(), "from")?;
         let binding = self.parse_ident()?;
         expect_keyword(self.shift(), "in")?;
@@ -356,7 +358,7 @@ impl<'a> Parser<'a> {
         Ok(lhs)
     }
 
-    fn parse_query(&mut self) -> ParseResult<Query> {
+    fn parse_query(&mut self) -> ParseResult<Query<Raw>> {
         self.scope += 1;
         let scope = self.scope;
 
@@ -426,6 +428,7 @@ impl<'a> Parser<'a> {
             limit,
             projection,
             distinct,
+            _marker: PhantomData,
         })
     }
 }
@@ -507,7 +510,7 @@ fn binding_pow(op: Operator) -> (u64, u64) {
 /// 3. Additive (`+`, `-`)
 /// 4. Comparison (`<`, `<=`, `>`, `>=`, `==`, `!=`)
 /// 5. Logical (`AND`, `OR`, `XOR`)
-pub fn parse<'a>(input: &'a [Token<'a>]) -> ParseResult<Query> {
+pub fn parse<'a>(input: &'a [Token<'a>]) -> ParseResult<Query<Raw>> {
     let mut parser = Parser::new(input);
 
     parser.parse_query()

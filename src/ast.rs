@@ -11,7 +11,13 @@
 //! - [`Value`] - The various kinds of expression values (literals, operators, etc.)
 //! - [`Source`] - Data sources in FROM clauses
 //!
-use crate::token::{Operator, Token};
+use std::{collections::BTreeMap, marker::PhantomData};
+
+use crate::{
+    analysis::{AnalysisOptions, static_analysis},
+    error::Error,
+    token::{Operator, Token},
+};
 use serde::Serialize;
 
 /// Position information for source code locations.
@@ -49,7 +55,7 @@ impl From<Token<'_>> for Pos {
 ///
 /// This enum represents the type of an expression in the EventQL type system.
 /// Types can be inferred during semantic analysis or left as `Unspecified`.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 pub enum Type {
     /// Type has not been determined yet
     Unspecified,
@@ -60,9 +66,9 @@ pub enum Type {
     /// Boolean type
     Bool,
     /// Array type
-    Array,
+    Array(Vec<Type>),
     /// Record (object) type
-    Record,
+    Record(BTreeMap<String, Type>),
     /// Subject pattern type
     Subject,
 }
@@ -71,7 +77,7 @@ pub enum Type {
 ///
 /// These attributes provide metadata about an expression, including its
 /// position in the source code, scope information, and type information.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Attrs {
     /// Source position of this expression
     pub pos: Pos,
@@ -223,11 +229,11 @@ pub enum Value {
 /// - `binding`: `"e"`
 /// - `kind`: `SourceKind::Name("events")`
 #[derive(Debug, Clone, Serialize)]
-pub struct Source {
+pub struct Source<A> {
     /// Variable name bound to this source
     pub binding: String,
     /// What this source represents
-    pub kind: SourceKind,
+    pub kind: SourceKind<A>,
 }
 
 /// The kind of data source.
@@ -237,13 +243,13 @@ pub struct Source {
 /// - Subject patterns (e.g., `FROM e IN "users/john"`)
 /// - Subqueries (e.g., `FROM e IN (SELECT ...)`)
 #[derive(Debug, Clone, Serialize)]
-pub enum SourceKind {
+pub enum SourceKind<A> {
     /// Named source (identifier)
     Name(String),
     /// Subject pattern (string literal used as event subject pattern)
     Subject(String),
     /// Nested subquery
-    Subquery(Box<Query>),
+    Subquery(Box<Query<A>>),
 }
 
 /// ORDER BY clause specification.
@@ -309,6 +315,17 @@ pub enum Limit {
     Top(u64),
 }
 
+/// Represents the state of a query that only has a valid syntax. There are no guarantee that all
+/// the variables exists or that the query is sound. For example, if the user is asking for an event
+/// that has field that should be a string or a number at the same time.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Raw;
+
+/// Represents the state of a query that has been statically analysed. It includes all variables are defined
+/// and the types are sound.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Typed;
+
 /// A complete EventQL query.
 ///
 /// This is the root node of the AST, representing a full query with all its clauses.
@@ -345,11 +362,11 @@ pub enum Limit {
 /// assert!(query.limit.is_some());
 /// ```
 #[derive(Debug, Clone, Serialize)]
-pub struct Query {
+pub struct Query<A> {
     /// Metadata about this query
     pub attrs: Attrs,
     /// FROM clause sources (must have at least one)
-    pub sources: Vec<Source>,
+    pub sources: Vec<Source<A>>,
     /// Optional WHERE clause filter predicate
     pub predicate: Option<Expr>,
     /// Optional GROUP BY clause expression
@@ -362,4 +379,13 @@ pub struct Query {
     pub projection: Expr,
     /// Remove duplicate rows from the query's results
     pub distinct: bool,
+
+    #[serde(skip)]
+    pub(crate) _marker: PhantomData<A>,
+}
+
+impl Query<Raw> {
+    pub fn run_static_analysis(self, options: &AnalysisOptions) -> crate::Result<Query<Typed>> {
+        static_analysis(options, self).map_err(Error::Analysis)
+    }
 }

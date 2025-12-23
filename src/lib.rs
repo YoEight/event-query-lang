@@ -3,6 +3,7 @@
 //! This library provides a complete lexer and parser for EventQL (EQL), a query language
 //! designed for event sourcing systems. It allows you to parse EQL query strings into
 //! an abstract syntax tree (AST) that can be analyzed or executed.
+pub mod analysis;
 mod ast;
 mod error;
 mod lexer;
@@ -60,7 +61,7 @@ pub type Result<A> = std::result::Result<A, error::Error>;
 ///     Err(e) => println!("Parse error: {}", e),
 /// }
 /// ```
-pub fn parse_query(input: &str) -> Result<Query> {
+pub fn parse_query(input: &str) -> Result<Query<Raw>> {
     let tokens = tokenize(input).map_err(|e| match e {
         Err::Incomplete(_) => Error::Lexer(LexerError::IncompleteInput),
         Err::Error(x) => Error::Lexer(LexerError::InvalidSymbol(
