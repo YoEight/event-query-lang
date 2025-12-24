@@ -88,4 +88,7 @@ pub enum ParserError {
 }
 
 #[derive(Debug, Error)]
-pub enum AnalysisError {}
+pub enum AnalysisError {
+    #[error("{0}:{1}: binding '{2}' already exists")]
+    BindingAlreadyExists(u32, u32, String),
+}

@@ -237,7 +237,7 @@ impl<'a> Parser<'a> {
                         self.shift();
                         access = Access {
                             target: Box::new(Expr {
-                                attrs: access.target.attrs,
+                                attrs: access.target.attrs.clone(),
                                 value: Value::Access(access),
                             }),
                             field: self.parse_ident()?,
@@ -346,7 +346,7 @@ impl<'a> Parser<'a> {
             let rhs = self.parse_binary(rhs_bind)?;
 
             lhs = Expr {
-                attrs: lhs.attrs,
+                attrs: lhs.attrs.clone(),
                 value: Value::Binary(Binary {
                     lhs: Box::new(lhs),
                     operator,

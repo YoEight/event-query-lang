@@ -55,9 +55,10 @@ impl From<Token<'_>> for Pos {
 ///
 /// This enum represents the type of an expression in the EventQL type system.
 /// Types can be inferred during semantic analysis or left as `Unspecified`.
-#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize)]
 pub enum Type {
     /// Type has not been determined yet
+    #[default]
     Unspecified,
     /// Numeric type (f64)
     Number,
@@ -71,6 +72,8 @@ pub enum Type {
     Record(BTreeMap<String, Type>),
     /// Subject pattern type
     Subject,
+    /// Function type
+    App { args: Vec<Type>, result: Box<Type> },
 }
 
 /// Attributes attached to each expression node.
@@ -218,6 +221,20 @@ pub enum Value {
     Group(Box<Expr>),
 }
 
+/// A source binding. A name attached to a source of events.
+///
+/// # Examples
+/// in `FROM e IN events`, `e` is the binding.
+#[derive(Debug, Clone, Serialize)]
+pub struct Binding {
+    /// Name attached to a source of events
+    pub name: String,
+    /// Scope where that binding was introduced
+    pub scope: u64,
+    /// Position in the source code where that binding was introduced
+    pub pos: Pos,
+}
+
 /// A data source in a FROM clause.
 ///
 /// Sources specify where data comes from in a query. Each source has a binding
@@ -231,7 +248,7 @@ pub enum Value {
 #[derive(Debug, Clone, Serialize)]
 pub struct Source<A> {
     /// Variable name bound to this source
-    pub binding: String,
+    pub binding: Binding,
     /// What this source represents
     pub kind: SourceKind<A>,
 }
