@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::ControlFlow};
 
 use crate::{
     Attrs, Expr, Query, Raw, Source, SourceKind, Type, Typed, Value, error::AnalysisError,
@@ -109,12 +109,23 @@ impl<'a> Analysis<'a> {
         self.analyze_value(&expr.attrs, &expr.value, expect)
     }
 
-    fn analyze_value(&mut self, attrs: &Attrs, value: &Value, expect: Type) -> AnalysisResult<()> {
-        match value {
-            Value::Number(_) => todo!(),
-            Value::String(_) => todo!(),
-            Value::Bool(_) => todo!(),
-            Value::Id(_) => todo!(),
+    fn analyze_value(
+        &mut self,
+        attrs: &Attrs,
+        value: &Value,
+        mut expect: Type,
+    ) -> AnalysisResult<()> {
+        let result = match value {
+            Value::Number(_) => expect.check_mut(Type::Number),
+            Value::String(_) => expect.check_mut(Type::String),
+            Value::Bool(_) => expect.check_mut(Type::Bool),
+            Value::Id(id) => {
+                if let Some(info) = self.options.default_scope.entries.get(id) {
+                    expect.check_mut(info.tpe.clone())
+                } else {
+                    todo!()
+                }
+            }
             Value::Array(exprs) => todo!(),
             Value::Record(fields) => todo!(),
             Value::Access(access) => todo!(),
@@ -122,7 +133,22 @@ impl<'a> Analysis<'a> {
             Value::Binary(binary) => todo!(),
             Value::Unary(unary) => todo!(),
             Value::Group(expr) => todo!(),
+        };
+
+        if let ControlFlow::Break((expect, actual)) = result {
+            return Err(AnalysisError::TypeMismatch(
+                attrs.pos.line,
+                attrs.pos.col,
+                expect,
+                actual,
+            ));
         }
+
+        todo!()
+    }
+
+    fn get_id_type_info_mut(&mut self, id: &str) -> Option<&mut Type> {
+        todo!()
     }
 
     fn projection_type(&self, query: &Query<Typed>) -> TypeInfo {

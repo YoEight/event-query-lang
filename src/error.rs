@@ -4,7 +4,7 @@
 //! and parsing of EventQL queries. All errors include position information
 //! (line and column numbers) to help diagnose issues in query strings.
 
-use crate::token::Symbol;
+use crate::{Type, token::Symbol};
 use thiserror::Error;
 
 /// Top-level error type for the EventQL parser.
@@ -94,4 +94,7 @@ pub enum ParserError {
 pub enum AnalysisError {
     #[error("{0}:{1}: binding '{2}' already exists")]
     BindingAlreadyExists(u32, u32, String),
+
+    #[error("{0}:{1}: type mismatch: expected {2:?} but got {3:?} ")]
+    TypeMismatch(u32, u32, Type, Type),
 }
