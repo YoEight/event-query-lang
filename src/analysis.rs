@@ -718,15 +718,7 @@ impl<'a> Analysis<'a> {
 
             Value::Id(id) => {
                 if let Some(tpe) = self.scope.entries.get(id).cloned() {
-                    if matches!(&tpe, Type::Record(f) if !f.is_empty()) {
-                        Ok(tpe)
-                    } else {
-                        Err(AnalysisError::ExpectRecord(
-                            expr.attrs.pos.line,
-                            expr.attrs.pos.col,
-                            tpe,
-                        ))
-                    }
+                    Ok(tpe)
                 } else {
                     Err(AnalysisError::VariableUndeclared(
                         expr.attrs.pos.line,
@@ -736,7 +728,32 @@ impl<'a> Analysis<'a> {
                 }
             }
 
-            _ => Err(AnalysisError::ExpectRecord(
+            Value::Access(access) => {
+                let mut current = &access.target.value;
+
+                loop {
+                    match current {
+                        Value::Id(name) => {
+                            if !self.scope.entries.contains_key(name) {
+                                return Err(AnalysisError::VariableUndeclared(
+                                    expr.attrs.pos.line,
+                                    expr.attrs.pos.col,
+                                    name.clone(),
+                                ));
+                            }
+
+                            break;
+                        }
+
+                        Value::Access(next) => current = &next.target.value,
+                        _ => unreachable!(),
+                    }
+                }
+
+                self.analyze_expr(ctx, expr, Type::Unspecified)
+            }
+
+            _ => Err(AnalysisError::ExpectRecordOrSourcedProperty(
                 expr.attrs.pos.line,
                 expr.attrs.pos.col,
                 self.project_type(&expr.value),
