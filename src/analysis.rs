@@ -1528,7 +1528,35 @@ impl<'a> Analysis<'a> {
     }
 }
 
-fn name_to_type(opts: &AnalysisOptions, name: &str) -> Option<Type> {
+/// Converts a type name string to its corresponding [`Type`] variant.
+///
+/// This function performs case-insensitive matching for built-in type names and checks
+/// against custom types defined in the analysis options.
+///
+/// # Returns
+///
+/// * `Some(Type)` - If the name matches a built-in type or custom type
+/// * `None` - If the name doesn't match any known type
+///
+/// # Built-in Type Mappings
+///
+/// The following type names are recognized (case-insensitive):
+/// - `"string"` → [`Type::String`]
+/// - `"int"` or `"float64"` → [`Type::Number`]
+/// - `"boolean"` → [`Type::Bool`]
+/// - `"date"` → [`Type::Date`]
+/// - `"time"` → [`Type::Time`]
+/// - `"datetime"` → [`Type::DateTime`]
+///
+/// # Examples
+///
+/// ```ignore
+/// let opts = AnalysisOptions::default();
+/// assert_eq!(name_to_type(&opts, "String"), Some(Type::String));
+/// assert_eq!(name_to_type(&opts, "INT"), Some(Type::Number));
+/// assert_eq!(name_to_type(&opts, "unknown"), None);
+/// ```
+pub fn name_to_type(opts: &AnalysisOptions, name: &str) -> Option<Type> {
     if name.eq_ignore_ascii_case("string") {
         Some(Type::String)
     } else if name.eq_ignore_ascii_case("int") || name.eq_ignore_ascii_case("float64") {
