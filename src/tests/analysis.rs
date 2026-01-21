@@ -175,3 +175,21 @@ fn test_typecheck_datetime_contravariance_4() {
         Type::Number
     ));
 }
+
+#[test]
+fn test_analyze_allow_regular_property_project_into() {
+    let query = parse_query(include_str!(
+        "./resources/allow_regular_property_project_into.eql"
+    ))
+    .unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
+
+#[test]
+fn test_analyze_undeclared_variable_in_project_into_clause() {
+    let query = parse_query(include_str!(
+        "./resources/undeclared_variable_in_project_into_clause.eql"
+    ))
+    .unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}

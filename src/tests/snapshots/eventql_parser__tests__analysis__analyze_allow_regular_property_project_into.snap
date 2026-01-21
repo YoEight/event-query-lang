@@ -1,0 +1,39 @@
+---
+source: src/tests/analysis.rs
+expression: "query.run_static_analysis(&Default::default())"
+---
+Ok:
+  attrs:
+    pos:
+      line: 1
+      col: 1
+  sources:
+    - binding:
+        name: e
+        pos:
+          line: 1
+          col: 6
+      kind:
+        Name: events
+  predicate: ~
+  group_by: ~
+  order_by: ~
+  limit: ~
+  projection:
+    attrs:
+      pos:
+        line: 2
+        col: 14
+    value:
+      Access:
+        target:
+          attrs:
+            pos:
+              line: 2
+              col: 14
+          value:
+            Id: e
+        field: type
+  distinct: false
+  meta:
+    project: String

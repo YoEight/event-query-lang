@@ -1,0 +1,10 @@
+---
+source: src/tests/analysis.rs
+expression: "query.run_static_analysis(&Default::default())"
+---
+Err:
+  Analysis:
+    VariableUndeclared:
+      - 2
+      - 14
+      - f

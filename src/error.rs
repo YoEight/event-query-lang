@@ -161,6 +161,15 @@ pub enum AnalysisError {
     #[error("{0}:{1}: expected record but got {2}")]
     ExpectRecord(u32, u32, Type),
 
+    /// Expected a record or sourced-property but found a different type.
+    ///
+    /// Fields: `(line, column, actual_type)`
+    ///
+    /// This occurs when checking a projection and the static analysis found
+    /// out the project into clause doesn't return a record nor a sourced-based property.
+    #[error("{0}:{1}: expected a record or a sourced-property but got {2}")]
+    ExpectRecordOrSourcedProperty(u32, u32, Type),
+
     /// Expected an array type but found a different type.
     ///
     /// Fields: `(line, column, actual_type)`
