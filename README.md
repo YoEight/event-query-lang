@@ -47,22 +47,6 @@ LIMIT 10
 PROJECT INTO { id: e.id, price: e.price }
 ```
 
-### Supported Clauses
-
-- **FROM**: Define event sources (streams, subqueries)
-- **WHERE**: Filter events with expressions
-- **GROUP BY**: Group events by field or expression
-- **ORDER BY**: Sort results (ASC/DESC)
-- **LIMIT**: Limit number of results
-- **PROJECT**: Define output shape
-
-### Operators
-
-- **Arithmetic**: `+`, `-`, `*`, `/`
-- **Comparison**: `==`, `!=`, `<`, `<=`, `>`, `>=`
-- **Logical**: `AND`, `OR`, `XOR`, `NOT`
-- **Field Access**: `e.field`, `e.nested.field`
-
 ## Acknowledgements
 
 This parser is based on the EventQL language specification from [EventSourcingDB] by The Native Web.
