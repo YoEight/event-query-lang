@@ -193,3 +193,9 @@ fn test_analyze_undeclared_variable_in_project_into_clause() {
     .unwrap();
     insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
 }
+
+#[test]
+fn test_analyze_lowercase_function() {
+    let query = parse_query(include_str!("./resources/lowercase_function.eql")).unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}

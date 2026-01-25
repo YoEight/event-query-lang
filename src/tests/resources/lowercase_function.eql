@@ -1,0 +1,3 @@
+FROM e IN events
+WHERE e.data.date > now()
+PROJECT INTO e

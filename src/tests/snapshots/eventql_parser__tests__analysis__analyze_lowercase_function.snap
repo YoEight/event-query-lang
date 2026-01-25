@@ -1,0 +1,86 @@
+---
+source: src/tests/analysis.rs
+expression: "query.run_static_analysis(&Default::default())"
+---
+Ok:
+  attrs:
+    pos:
+      line: 1
+      col: 1
+  sources:
+    - binding:
+        name: e
+        pos:
+          line: 1
+          col: 6
+      kind:
+        Name: events
+  predicate:
+    attrs:
+      pos:
+        line: 2
+        col: 7
+    value:
+      Binary:
+        lhs:
+          attrs:
+            pos:
+              line: 2
+              col: 7
+          value:
+            Access:
+              target:
+                attrs:
+                  pos:
+                    line: 2
+                    col: 7
+                value:
+                  Access:
+                    target:
+                      attrs:
+                        pos:
+                          line: 2
+                          col: 7
+                      value:
+                        Id: e
+                    field: data
+              field: date
+        operator: Gt
+        rhs:
+          attrs:
+            pos:
+              line: 2
+              col: 21
+          value:
+            App:
+              func: now
+              args: []
+  group_by: ~
+  order_by: ~
+  limit: ~
+  projection:
+    attrs:
+      pos:
+        line: 3
+        col: 14
+    value:
+      Id: e
+  distinct: false
+  meta:
+    project:
+      Record:
+        data:
+          Record:
+            date: DateTime
+        datacontenttype: String
+        hash: String
+        id: String
+        predecessorhash: String
+        signature: String
+        source: String
+        specversion: String
+        subject: Subject
+        time: DateTime
+        traceparent: String
+        tracestate: String
+        type: String
