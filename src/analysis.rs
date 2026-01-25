@@ -1,10 +1,11 @@
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap, HashSet, btree_map::Entry},
+    collections::{BTreeMap, HashSet, btree_map::Entry},
     mem,
 };
 
-use serde::Serialize;
+use case_insensitive_hashmap::CaseInsensitiveHashMap;
+use serde::{Serialize, ser::SerializeMap};
 use unicase::Ascii;
 
 use crate::{
@@ -108,9 +109,9 @@ impl Default for AnalysisOptions {
     fn default() -> Self {
         Self {
             default_scope: Scope {
-                entries: HashMap::from([
+                entries: CaseInsensitiveHashMap::from_iter([
                     (
-                        "ABS".to_owned(),
+                        "ABS",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -118,7 +119,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "CEIL".to_owned(),
+                        "CEIL",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -126,7 +127,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "FLOOR".to_owned(),
+                        "FLOOR",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -134,7 +135,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "ROUND".to_owned(),
+                        "ROUND",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -142,7 +143,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "COS".to_owned(),
+                        "COS",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -150,7 +151,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "EXP".to_owned(),
+                        "EXP",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -158,7 +159,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "POW".to_owned(),
+                        "POW",
                         Type::App {
                             args: vec![Type::Number, Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -166,7 +167,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "SQRT".to_owned(),
+                        "SQRT",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -174,7 +175,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "RAND".to_owned(),
+                        "RAND",
                         Type::App {
                             args: vec![].into(),
                             result: Box::new(Type::Number),
@@ -182,7 +183,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "PI".to_owned(),
+                        "PI",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -190,7 +191,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "LOWER".to_owned(),
+                        "LOWER",
                         Type::App {
                             args: vec![Type::String].into(),
                             result: Box::new(Type::String),
@@ -198,7 +199,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "UPPER".to_owned(),
+                        "UPPER",
                         Type::App {
                             args: vec![Type::String].into(),
                             result: Box::new(Type::String),
@@ -206,7 +207,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "TRIM".to_owned(),
+                        "TRIM",
                         Type::App {
                             args: vec![Type::String].into(),
                             result: Box::new(Type::String),
@@ -214,7 +215,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "LTRIM".to_owned(),
+                        "LTRIM",
                         Type::App {
                             args: vec![Type::String].into(),
                             result: Box::new(Type::String),
@@ -222,7 +223,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "RTRIM".to_owned(),
+                        "RTRIM",
                         Type::App {
                             args: vec![Type::String].into(),
                             result: Box::new(Type::String),
@@ -230,7 +231,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "LEN".to_owned(),
+                        "LEN",
                         Type::App {
                             args: vec![Type::String].into(),
                             result: Box::new(Type::Number),
@@ -238,7 +239,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "INSTR".to_owned(),
+                        "INSTR",
                         Type::App {
                             args: vec![Type::String].into(),
                             result: Box::new(Type::Number),
@@ -246,7 +247,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "SUBSTRING".to_owned(),
+                        "SUBSTRING",
                         Type::App {
                             args: vec![Type::String, Type::Number, Type::Number].into(),
                             result: Box::new(Type::String),
@@ -254,7 +255,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "REPLACE".to_owned(),
+                        "REPLACE",
                         Type::App {
                             args: vec![Type::String, Type::String, Type::String].into(),
                             result: Box::new(Type::String),
@@ -262,7 +263,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "STARTSWITH".to_owned(),
+                        "STARTSWITH",
                         Type::App {
                             args: vec![Type::String, Type::String].into(),
                             result: Box::new(Type::Bool),
@@ -270,7 +271,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "ENDSWITH".to_owned(),
+                        "ENDSWITH",
                         Type::App {
                             args: vec![Type::String, Type::String].into(),
                             result: Box::new(Type::Bool),
@@ -278,7 +279,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "NOW".to_owned(),
+                        "NOW",
                         Type::App {
                             args: vec![].into(),
                             result: Box::new(Type::DateTime),
@@ -286,7 +287,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "YEAR".to_owned(),
+                        "YEAR",
                         Type::App {
                             args: vec![Type::Date].into(),
                             result: Box::new(Type::Number),
@@ -294,7 +295,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "MONTH".to_owned(),
+                        "MONTH",
                         Type::App {
                             args: vec![Type::Date].into(),
                             result: Box::new(Type::Number),
@@ -302,7 +303,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "DAY".to_owned(),
+                        "DAY",
                         Type::App {
                             args: vec![Type::Date].into(),
                             result: Box::new(Type::Number),
@@ -310,7 +311,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "HOUR".to_owned(),
+                        "HOUR",
                         Type::App {
                             args: vec![Type::Time].into(),
                             result: Box::new(Type::Number),
@@ -318,7 +319,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "MINUTE".to_owned(),
+                        "MINUTE",
                         Type::App {
                             args: vec![Type::Time].into(),
                             result: Box::new(Type::Number),
@@ -326,7 +327,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "SECOND".to_owned(),
+                        "SECOND",
                         Type::App {
                             args: vec![Type::Time].into(),
                             result: Box::new(Type::Number),
@@ -334,7 +335,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "WEEKDAY".to_owned(),
+                        "WEEKDAY",
                         Type::App {
                             args: vec![Type::Date].into(),
                             result: Box::new(Type::Number),
@@ -342,7 +343,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "IF".to_owned(),
+                        "IF",
                         Type::App {
                             args: vec![Type::Bool, Type::Unspecified, Type::Unspecified].into(),
                             result: Box::new(Type::Unspecified),
@@ -350,7 +351,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "COUNT".to_owned(),
+                        "COUNT",
                         Type::App {
                             args: FunArgs {
                                 values: vec![Type::Bool],
@@ -361,7 +362,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "SUM".to_owned(),
+                        "SUM",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -369,7 +370,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "AVG".to_owned(),
+                        "AVG",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -377,7 +378,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "MIN".to_owned(),
+                        "MIN",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -385,7 +386,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "MAX".to_owned(),
+                        "MAX",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -393,7 +394,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "MEDIAN".to_owned(),
+                        "MEDIAN",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -401,7 +402,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "STDDEV".to_owned(),
+                        "STDDEV",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -409,7 +410,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "VARIANCE".to_owned(),
+                        "VARIANCE",
                         Type::App {
                             args: vec![Type::Number].into(),
                             result: Box::new(Type::Number),
@@ -417,7 +418,7 @@ impl Default for AnalysisOptions {
                         },
                     ),
                     (
-                        "UNIQUE".to_owned(),
+                        "UNIQUE",
                         Type::App {
                             args: vec![Type::Unspecified].into(),
                             result: Box::new(Type::Unspecified),
@@ -481,10 +482,25 @@ pub fn static_analysis(
 /// A scope tracks the variables and their types that are currently in scope
 /// during type checking. This is used to resolve variable references and
 /// ensure type correctness.
-#[derive(Default, Serialize, Clone, Debug)]
+#[derive(Default, Clone, Debug)]
 pub struct Scope {
     /// Map of variable names to their types.
-    pub entries: HashMap<String, Type>,
+    pub entries: CaseInsensitiveHashMap<Type>,
+}
+
+impl Serialize for Scope {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.entries.len()))?;
+
+        for (key, value) in self.entries.iter() {
+            map.serialize_entry(key.as_str(), value)?;
+        }
+
+        map.end()
+    }
 }
 
 impl Scope {
@@ -717,7 +733,7 @@ impl<'a> Analysis<'a> {
             }
 
             Value::Id(id) => {
-                if let Some(tpe) = self.scope.entries.get(id).cloned() {
+                if let Some(tpe) = self.scope.entries.get(id.as_str()).cloned() {
                     Ok(tpe)
                 } else {
                     Err(AnalysisError::VariableUndeclared(
@@ -734,7 +750,7 @@ impl<'a> Analysis<'a> {
                 loop {
                     match current {
                         Value::Id(name) => {
-                            if !self.scope.entries.contains_key(name) {
+                            if !self.scope.entries.contains_key(name.as_str()) {
                                 return Err(AnalysisError::VariableUndeclared(
                                     expr.attrs.pos.line,
                                     expr.attrs.pos.col,
@@ -790,7 +806,7 @@ impl<'a> Analysis<'a> {
             Value::Number(_) | Value::String(_) | Value::Bool(_) => Ok(()),
 
             Value::Id(id) => {
-                if self.scope.entries.contains_key(id) {
+                if self.scope.entries.contains_key(id.as_str()) {
                     if ctx.use_agg_func {
                         return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
                             expr.attrs.pos.line,
@@ -859,7 +875,9 @@ impl<'a> Analysis<'a> {
 
     fn ensure_agg_param_is_source_bound(&mut self, expr: &Expr) -> AnalysisResult<()> {
         match &expr.value {
-            Value::Id(id) if !self.options.default_scope.entries.contains_key(id) => Ok(()),
+            Value::Id(id) if !self.options.default_scope.entries.contains_key(id.as_str()) => {
+                Ok(())
+            }
             Value::Access(access) => self.ensure_agg_param_is_source_bound(&access.target),
             Value::Binary(binary) => self.ensure_agg_binary_op_is_source_bound(&expr.attrs, binary),
             Value::Unary(unary) => self.ensure_agg_param_is_source_bound(&unary.expr),
@@ -890,7 +908,7 @@ impl<'a> Analysis<'a> {
 
     fn ensure_agg_binary_op_branch_is_source_bound(&mut self, expr: &Expr) -> bool {
         match &expr.value {
-            Value::Id(id) => !self.options.default_scope.entries.contains_key(id),
+            Value::Id(id) => !self.options.default_scope.entries.contains_key(id.as_str()),
             Value::Array(exprs) => {
                 if exprs.is_empty() {
                     return false;
@@ -949,7 +967,7 @@ impl<'a> Analysis<'a> {
 
             Value::App(app) => {
                 if let Some(Type::App { aggregate, .. }) =
-                    self.options.default_scope.entries.get(&app.func)
+                    self.options.default_scope.entries.get(app.func.as_str())
                     && *aggregate
                 {
                     return Err(AnalysisError::WrongAggFunUsage(
@@ -1017,7 +1035,7 @@ impl<'a> Analysis<'a> {
             Value::Bool(_) => expect.check(&expr.attrs, Type::Bool),
 
             Value::Id(id) => {
-                if let Some(tpe) = self.options.default_scope.entries.get(id) {
+                if let Some(tpe) = self.options.default_scope.entries.get(id.as_str()) {
                     expect.check(&expr.attrs, tpe.clone())
                 } else if let Some(tpe) = self.scope.entries.get_mut(id.as_str()) {
                     let tmp = mem::take(tpe);
@@ -1437,9 +1455,9 @@ impl<'a> Analysis<'a> {
             Value::String(_) => Type::String,
             Value::Bool(_) => Type::Bool,
             Value::Id(id) => {
-                if let Some(tpe) = self.options.default_scope.entries.get(id) {
+                if let Some(tpe) = self.options.default_scope.entries.get(id.as_str()) {
                     tpe.clone()
-                } else if let Some(tpe) = self.scope.entries.get(id) {
+                } else if let Some(tpe) = self.scope.entries.get(id.as_str()) {
                     tpe.clone()
                 } else {
                     Type::Unspecified

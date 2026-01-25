@@ -16,6 +16,7 @@ thiserror = "2"
 nom = "8"
 nom_locate = "5"
 unicase = "2"
+case_insensitive_hashmap = "1"
 
 [dependencies.serde]
 version = "1"
