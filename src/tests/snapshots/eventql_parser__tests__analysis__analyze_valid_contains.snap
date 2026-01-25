@@ -100,3 +100,4 @@ Ok:
         traceparent: String
         tracestate: String
         type: String
+    aggregate: false

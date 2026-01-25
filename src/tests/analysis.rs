@@ -127,7 +127,7 @@ fn test_typecheck_datetime_contravariance_1() {
 
     // `e.time` is a `Type::DateTime` but it will typecheck if a `Type::Date` is expected
     insta::assert_yaml_snapshot!(analysis.analyze_expr(
-        &AnalysisContext::default(),
+        &mut AnalysisContext::default(),
         &expr,
         Type::Date
     ));
@@ -142,7 +142,7 @@ fn test_typecheck_datetime_contravariance_2() {
 
     // `NOW()` is a `Type::DateTime` but it will typecheck if a `Type::Time` is expected
     insta::assert_yaml_snapshot!(analysis.analyze_expr(
-        &AnalysisContext::default(),
+        &mut AnalysisContext::default(),
         &expr,
         Type::Time
     ));
@@ -156,7 +156,7 @@ fn test_typecheck_datetime_contravariance_3() {
     let mut analysis = Analysis::new(&options);
 
     insta::assert_yaml_snapshot!(analysis.analyze_expr(
-        &AnalysisContext::default(),
+        &mut AnalysisContext::default(),
         &expr,
         Type::Number
     ));
@@ -170,7 +170,7 @@ fn test_typecheck_datetime_contravariance_4() {
     let mut analysis = Analysis::new(&options);
 
     insta::assert_yaml_snapshot!(analysis.analyze_expr(
-        &AnalysisContext::default(),
+        &mut AnalysisContext::default(),
         &expr,
         Type::Number
     ));
@@ -197,5 +197,23 @@ fn test_analyze_undeclared_variable_in_project_into_clause() {
 #[test]
 fn test_analyze_lowercase_function() {
     let query = parse_query(include_str!("./resources/lowercase_function.eql")).unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
+
+#[test]
+fn test_analyze_project_agg_value() {
+    let query = parse_query(include_str!("./resources/project_agg_value.eql")).unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
+
+#[test]
+fn test_analyze_reject_constant_expr_in_project_into_clause() {
+    let query = parse_query(include_str!("./resources/reject_constant_expr.eql")).unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
+
+#[test]
+fn test_analyze_allow_constant_agg_func() {
+    let query = parse_query(include_str!("./resources/allow_constant_agg_func.eql")).unwrap();
     insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
 }

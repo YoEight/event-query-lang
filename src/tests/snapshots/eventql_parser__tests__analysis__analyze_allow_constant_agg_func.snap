@@ -25,16 +25,10 @@ Ok:
         line: 2
         col: 14
     value:
-      Access:
-        target:
-          attrs:
-            pos:
-              line: 2
-              col: 14
-          value:
-            Id: e
-        field: type
+      App:
+        func: count
+        args: []
   distinct: false
   meta:
-    project: String
-    aggregate: false
+    project: Number
+    aggregate: true

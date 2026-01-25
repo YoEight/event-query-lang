@@ -78,3 +78,4 @@ Ok:
     project:
       Record:
         voters: Number
+    aggregate: true

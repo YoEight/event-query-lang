@@ -70,3 +70,4 @@ Ok:
     project:
       Record:
         date: DateTime
+    aggregate: false

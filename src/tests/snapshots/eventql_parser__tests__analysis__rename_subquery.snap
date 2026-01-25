@@ -121,6 +121,7 @@ Ok:
               Record:
                 orderId: Unspecified
                 value: Unspecified
+            aggregate: false
   predicate:
     attrs:
       pos:
@@ -167,3 +168,4 @@ Ok:
       Record:
         orderId: Unspecified
         value: Number
+    aggregate: false
