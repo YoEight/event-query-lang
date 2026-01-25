@@ -9,7 +9,7 @@ use serde::{Serialize, ser::SerializeMap};
 use unicase::Ascii;
 
 use crate::{
-    Attrs, Binary, Expr, Field, FunArgs, Query, Raw, Source, SourceKind, Type, Value,
+    App, Attrs, Binary, Expr, Field, FunArgs, Query, Raw, Source, SourceKind, Type, Value,
     error::AnalysisError, token::Operator,
 };
 
@@ -36,6 +36,9 @@ pub struct Typed {
     /// including bindings from FROM clauses and their associated types.
     #[serde(skip)]
     pub scope: Scope,
+
+    /// Indicates if the query uses aggregate functions.
+    pub aggregate: bool,
 }
 
 /// Result type for static analysis operations.
@@ -528,6 +531,9 @@ pub struct AnalysisContext {
     /// Set to `true` to allow aggregate functions, `false` to reject them.
     /// Defaults to `false`.
     pub allow_agg_func: bool,
+
+    /// Indicates if the query uses aggregate functions.
+    pub use_agg_funcs: bool,
 }
 
 /// A type checker and static analyzer for EventQL expressions.
@@ -631,7 +637,7 @@ impl<'a> Analysis<'a> {
         }
 
         if let Some(expr) = &query.predicate {
-            self.analyze_expr(&ctx, expr, Type::Bool)?;
+            self.analyze_expr(&mut ctx, expr, Type::Bool)?;
         }
 
         if let Some(group_by) = &query.group_by {
@@ -642,10 +648,10 @@ impl<'a> Analysis<'a> {
                 ));
             }
 
-            self.analyze_expr(&ctx, &group_by.expr, Type::Unspecified)?;
+            self.analyze_expr(&mut ctx, &group_by.expr, Type::Unspecified)?;
 
             if let Some(expr) = &group_by.predicate {
-                self.analyze_expr(&ctx, expr, Type::Bool)?;
+                self.analyze_expr(&mut ctx, expr, Type::Bool)?;
             }
         }
 
@@ -656,7 +662,7 @@ impl<'a> Analysis<'a> {
                     order_by.expr.attrs.pos.col,
                 ));
             }
-            self.analyze_expr(&ctx, &order_by.expr, Type::Unspecified)?;
+            self.analyze_expr(&mut ctx, &order_by.expr, Type::Unspecified)?;
         }
 
         let project = self.analyze_projection(&mut ctx, &query.projection)?;
@@ -671,7 +677,11 @@ impl<'a> Analysis<'a> {
             limit: query.limit,
             projection: query.projection,
             distinct: query.distinct,
-            meta: Typed { project, scope },
+            meta: Typed {
+                project,
+                scope,
+                aggregate: ctx.use_agg_funcs,
+            },
         })
     }
 
@@ -729,6 +739,20 @@ impl<'a> Analysis<'a> {
                 ctx.allow_agg_func = true;
                 let tpe = self.analyze_expr(ctx, expr, Type::Unspecified)?;
                 self.check_projection_on_record(&mut CheckContext::default(), record.as_slice())?;
+                Ok(tpe)
+            }
+
+            Value::App(app) => {
+                ctx.allow_agg_func = true;
+
+                let tpe = self.analyze_expr(ctx, expr, Type::Unspecified)?;
+
+                if ctx.use_agg_funcs {
+                    self.check_projection_on_field_expr(&mut CheckContext::default(), expr)?;
+                } else {
+                    self.reject_constant_func(&expr.attrs, app)?;
+                }
+
                 Ok(tpe)
             }
 
@@ -994,6 +1018,87 @@ impl<'a> Analysis<'a> {
         }
     }
 
+    fn reject_constant_func(&self, attrs: &Attrs, app: &App) -> AnalysisResult<()> {
+        if app.args.is_empty() {
+            return Err(AnalysisError::ConstantExprInProjectIntoClause(
+                attrs.pos.line,
+                attrs.pos.col,
+            ));
+        }
+
+        let mut errored = None;
+        for arg in &app.args {
+            if let Err(e) = self.reject_constant_expr(arg) {
+                if errored.is_none() {
+                    errored = Some(e);
+                }
+
+                continue;
+            }
+
+            // if at least one arg is sourced-bound is ok
+            return Ok(());
+        }
+
+        Err(errored.expect("to be defined at that point"))
+    }
+
+    fn reject_constant_expr(&self, expr: &Expr) -> AnalysisResult<()> {
+        match &expr.value {
+            Value::Id(id) if self.scope.entries.contains_key(id.as_str()) => Ok(()),
+
+            Value::Array(exprs) => {
+                let mut errored = None;
+                for expr in exprs {
+                    if let Err(e) = self.reject_constant_expr(expr) {
+                        if errored.is_none() {
+                            errored = Some(e);
+                        }
+
+                        continue;
+                    }
+
+                    // if at least one arg is sourced-bound is ok
+                    return Ok(());
+                }
+
+                Err(errored.expect("to be defined at that point"))
+            }
+
+            Value::Record(fields) => {
+                let mut errored = None;
+                for field in fields {
+                    if let Err(e) = self.reject_constant_expr(&field.value) {
+                        if errored.is_none() {
+                            errored = Some(e);
+                        }
+
+                        continue;
+                    }
+
+                    // if at least one arg is sourced-bound is ok
+                    return Ok(());
+                }
+
+                Err(errored.expect("to be defined at that point"))
+            }
+
+            Value::Binary(binary) => self
+                .reject_constant_expr(&binary.lhs)
+                .or_else(|e| self.reject_constant_expr(&binary.rhs).map_err(|_| e)),
+
+            Value::Access(access) => self.reject_constant_expr(access.target.as_ref()),
+            Value::App(app) => self.reject_constant_func(&expr.attrs, app),
+            Value::Unary(unary) => self.reject_constant_expr(&unary.expr),
+            Value::Group(expr) => self.reject_constant_expr(expr),
+
+            _ => Err(AnalysisError::ConstantExprInProjectIntoClause(
+                expr.attrs.pos.line,
+                expr.attrs.pos.col,
+            )),
+        }
+    }
+
     /// Analyzes an expression and checks it against an expected type.
     ///
     /// This method performs type checking on an expression, verifying that all operations
@@ -1025,7 +1130,7 @@ impl<'a> Analysis<'a> {
     /// ```
     pub fn analyze_expr(
         &mut self,
-        ctx: &AnalysisContext,
+        ctx: &mut AnalysisContext,
         expr: &Expr,
         mut expect: Type,
     ) -> AnalysisResult<Type> {
@@ -1145,6 +1250,10 @@ impl<'a> Analysis<'a> {
                             expr.attrs.pos.col,
                             app.func.clone(),
                         ));
+                    }
+
+                    if *aggregate && ctx.allow_agg_func {
+                        ctx.use_agg_funcs = true;
                     }
 
                     for (arg, tpe) in app.args.iter().zip(args.values.iter().cloned()) {

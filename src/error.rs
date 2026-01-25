@@ -311,6 +311,34 @@ pub enum AnalysisError {
     /// ```
     #[error("{0}:{1}: aggregate functions arguments must be source-bound fields")]
     ExpectSourceBoundProperty(u32, u32),
+
+    /// A constant expression is used in PROJECT INTO clause.
+    ///
+    /// Fields: `(line, column)`
+    ///
+    /// # Example
+    ///
+    /// Invalid usage:
+    /// ```eql
+    /// FROM e IN events
+    /// // Error: NOW() is constant value
+    /// PROJECT INTO NOW()
+    ///
+    /// ```
+    /// Invalid usage:
+    /// ```eql
+    /// FROM e IN events
+    /// // Error: DAY(NOW()) is also constant value
+    /// PROJECT INTO DAY(NOW())
+    /// ```
+    ///
+    /// Valid usage:
+    /// ```eql
+    /// FROM e IN events
+    /// PROJECT INTO DAY(e.data.date)
+    /// ```
+    #[error("{0}:{1}: constant expressions are forbidden in PROJECT INTO clause")]
+    ConstantExprInProjectIntoClause(u32, u32),
 }
 
 impl From<LexerError> for Error {

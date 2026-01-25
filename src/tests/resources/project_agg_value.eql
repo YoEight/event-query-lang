@@ -1,0 +1,2 @@
+FROM e IN events
+PROJECT INTO count(e.data.price > 10)

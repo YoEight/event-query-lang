@@ -83,3 +83,4 @@ Ok:
         label: String
         randomvalue: Number
         sum: Number
+    aggregate: true

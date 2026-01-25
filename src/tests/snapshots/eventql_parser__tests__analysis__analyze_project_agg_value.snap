@@ -1,6 +1,6 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.run_static_analysis(&AnalysisOptions::default().add_custom_type(\"Foobar\"))"
+expression: "query.run_static_analysis(&Default::default())"
 ---
 Ok:
   attrs:
@@ -25,50 +25,47 @@ Ok:
         line: 2
         col: 14
     value:
-      Record:
-        - name: date
-          value:
-            attrs:
+      App:
+        func: count
+        args:
+          - attrs:
               pos:
                 line: 2
-                col: 22
+                col: 20
             value:
               Binary:
                 lhs:
                   attrs:
                     pos:
                       line: 2
-                      col: 22
+                      col: 20
                   value:
                     Access:
                       target:
                         attrs:
                           pos:
                             line: 2
-                            col: 22
+                            col: 20
                         value:
                           Access:
                             target:
                               attrs:
                                 pos:
                                   line: 2
-                                  col: 22
+                                  col: 20
                               value:
                                 Id: e
                             field: data
-                      field: date
-                operator: As
+                      field: price
+                operator: Gt
                 rhs:
                   attrs:
                     pos:
                       line: 2
-                      col: 37
+                      col: 35
                   value:
-                    Id: Foobar
+                    Number: 10
   distinct: false
   meta:
-    project:
-      Record:
-        date:
-          Custom: Foobar
-    aggregate: false
+    project: Number
+    aggregate: true
