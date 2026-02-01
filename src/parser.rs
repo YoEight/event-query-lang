@@ -144,19 +144,17 @@ impl<'a> Parser<'a> {
         expect_keyword(self.shift(), "by")?;
 
         let expr = self.parse_expr()?;
-        let token = self.shift();
+        let token = self.peek();
 
         if let Sym::Id(name) = token.sym {
             let order = if name.eq_ignore_ascii_case("asc") {
+                self.shift();
                 Order::Asc
             } else if name.eq_ignore_ascii_case("desc") {
+                self.shift();
                 Order::Desc
             } else {
-                return Err(ParserError::UnexpectedToken(
-                    token.line,
-                    token.col,
-                    name.to_owned(),
-                ));
+                Order::Asc
             };
 
             return Ok(OrderBy { expr, order });
