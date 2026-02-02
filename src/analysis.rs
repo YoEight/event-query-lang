@@ -653,6 +653,9 @@ impl<'a> Analysis<'a> {
             if let Some(expr) = &group_by.predicate {
                 self.analyze_expr(&mut ctx, expr, Type::Bool)?;
             }
+
+            ctx.allow_agg_func = true;
+            ctx.use_agg_funcs = true;
         }
 
         let project = self.analyze_projection(&mut ctx, &query.projection)?;
@@ -742,7 +745,12 @@ impl<'a> Analysis<'a> {
 
                 ctx.allow_agg_func = true;
                 let tpe = self.analyze_expr(ctx, expr, Type::Unspecified)?;
-                self.check_projection_on_record(&mut CheckContext::default(), record.as_slice())?;
+                let mut chk_ctx = CheckContext {
+                    use_agg_func: ctx.use_agg_funcs,
+                    ..Default::default()
+                };
+
+                self.check_projection_on_record(&mut chk_ctx, record.as_slice())?;
                 Ok(tpe)
             }
 
@@ -752,13 +760,23 @@ impl<'a> Analysis<'a> {
                 let tpe = self.analyze_expr(ctx, expr, Type::Unspecified)?;
 
                 if ctx.use_agg_funcs {
-                    self.check_projection_on_field_expr(&mut CheckContext::default(), expr)?;
+                    let mut chk_ctx = CheckContext {
+                        use_agg_func: ctx.use_agg_funcs,
+                        ..Default::default()
+                    };
+
+                    self.check_projection_on_field_expr(&mut chk_ctx, expr)?;
                 } else {
                     self.reject_constant_func(&expr.attrs, app)?;
                 }
 
                 Ok(tpe)
             }
+
+            Value::Id(_) if ctx.use_agg_funcs => Err(AnalysisError::ExpectAggExpr(
+                expr.attrs.pos.line,
+                expr.attrs.pos.col,
+            )),
 
             Value::Id(id) => {
                 if let Some(tpe) = self.scope.entries.get(id.as_str()).cloned() {
@@ -771,6 +789,11 @@ impl<'a> Analysis<'a> {
                     ))
                 }
             }
+
+            Value::Access(_) if ctx.use_agg_funcs => Err(AnalysisError::ExpectAggExpr(
+                expr.attrs.pos.line,
+                expr.attrs.pos.col,
+            )),
 
             Value::Access(access) => {
                 let mut current = &access.target.value;

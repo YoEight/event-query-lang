@@ -1,0 +1,3 @@
+FROM e IN events
+GROUP BY e.data.department
+PROJECT INTO e.data.salary
