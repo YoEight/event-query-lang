@@ -1,0 +1,4 @@
+FROM e IN events
+GROUP BY e.data.department
+ORDER BY e.data.salary
+PROJECT INTO AVG(e.data.salary)

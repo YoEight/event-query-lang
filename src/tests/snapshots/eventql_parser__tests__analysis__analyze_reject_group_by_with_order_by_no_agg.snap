@@ -1,0 +1,9 @@
+---
+source: src/tests/analysis.rs
+expression: "query.run_static_analysis(&Default::default())"
+---
+Err:
+  Analysis:
+    ExpectAggExpr:
+      - 3
+      - 10
