@@ -655,17 +655,21 @@ impl<'a> Analysis<'a> {
             }
         }
 
+        let project = self.analyze_projection(&mut ctx, &query.projection)?;
+
         if let Some(order_by) = &query.order_by {
-            if !matches!(&order_by.expr.value, Value::Access(_)) {
+            self.analyze_expr(&mut ctx, &order_by.expr, Type::Unspecified)?;
+
+            if query.group_by.is_none() && !matches!(&order_by.expr.value, Value::Access(_)) {
                 return Err(AnalysisError::ExpectFieldLiteral(
                     order_by.expr.attrs.pos.line,
                     order_by.expr.attrs.pos.col,
                 ));
+            } else if query.group_by.is_some() {
+                self.expect_agg_expr(&order_by.expr)?;
             }
-            self.analyze_expr(&mut ctx, &order_by.expr, Type::Unspecified)?;
         }
 
-        let project = self.analyze_projection(&mut ctx, &query.projection)?;
         let scope = self.exit_scope();
 
         Ok(Query {
@@ -875,11 +879,11 @@ impl<'a> Analysis<'a> {
                         ));
                     }
 
-                    for arg in &app.args {
-                        if *aggregate {
-                            self.ensure_agg_param_is_source_bound(arg)?;
-                        }
+                    if *aggregate {
+                        return self.expect_agg_expr(expr);
+                    }
 
+                    for arg in &app.args {
                         self.invalidate_agg_func_usage(arg)?;
                     }
                 }
@@ -897,7 +901,27 @@ impl<'a> Analysis<'a> {
         }
     }
 
-    fn ensure_agg_param_is_source_bound(&mut self, expr: &Expr) -> AnalysisResult<()> {
+    fn expect_agg_expr(&self, expr: &Expr) -> AnalysisResult<()> {
+        if let Value::App(app) = &expr.value
+            && let Some(Type::App {
+                aggregate: true, ..
+            }) = self.options.default_scope.entries.get(app.func.as_str())
+        {
+            for arg in &app.args {
+                self.ensure_agg_param_is_source_bound(arg)?;
+                self.invalidate_agg_func_usage(arg)?;
+            }
+
+            return Ok(());
+        }
+
+        Err(AnalysisError::ExpectAggExpr(
+            expr.attrs.pos.line,
+            expr.attrs.pos.col,
+        ))
+    }
+
+    fn ensure_agg_param_is_source_bound(&self, expr: &Expr) -> AnalysisResult<()> {
         match &expr.value {
             Value::Id(id) if !self.options.default_scope.entries.contains_key(id.as_str()) => {
                 Ok(())
@@ -914,7 +938,7 @@ impl<'a> Analysis<'a> {
     }
 
     fn ensure_agg_binary_op_is_source_bound(
-        &mut self,
+        &self,
         attrs: &Attrs,
         binary: &Binary,
     ) -> AnalysisResult<()> {
@@ -930,7 +954,7 @@ impl<'a> Analysis<'a> {
         Ok(())
     }
 
-    fn ensure_agg_binary_op_branch_is_source_bound(&mut self, expr: &Expr) -> bool {
+    fn ensure_agg_binary_op_branch_is_source_bound(&self, expr: &Expr) -> bool {
         match &expr.value {
             Value::Id(id) => !self.options.default_scope.entries.contains_key(id.as_str()),
             Value::Array(exprs) => {
@@ -965,7 +989,7 @@ impl<'a> Analysis<'a> {
         }
     }
 
-    fn invalidate_agg_func_usage(&mut self, expr: &Expr) -> AnalysisResult<()> {
+    fn invalidate_agg_func_usage(&self, expr: &Expr) -> AnalysisResult<()> {
         match &expr.value {
             Value::Number(_)
             | Value::String(_)

@@ -217,3 +217,21 @@ fn test_analyze_allow_constant_agg_func() {
     let query = parse_query(include_str!("./resources/allow_constant_agg_func.eql")).unwrap();
     insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
 }
+
+#[test]
+fn test_analyze_reject_group_by_with_order_by_no_agg() {
+    let query = parse_query(include_str!(
+        "./resources/reject_group_by_with_order_by_no_agg.eql"
+    ))
+    .unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
+
+#[test]
+fn test_analyze_accept_group_by_with_order_by_with_agg() {
+    let query = parse_query(include_str!(
+        "./resources/accept_group_by_with_order_by_with_agg.eql"
+    ))
+    .unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}

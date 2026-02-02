@@ -339,6 +339,29 @@ pub enum AnalysisError {
     /// ```
     #[error("{0}:{1}: constant expressions are forbidden in PROJECT INTO clause")]
     ConstantExprInProjectIntoClause(u32, u32),
+
+    /// Expect an aggregate expression at this position in the query.
+    ///
+    /// Fields: `(line, column)`
+    ///
+    /// Invalid usage:
+    /// ```eql
+    /// FROM e IN events
+    /// GROUP BY e.data.department
+    /// // ERROR: the order by clause should use an aggregage expresion because GROUP Bys
+    /// // require an aggregate expression in this context.
+    /// ORDER BY e.data.salary
+    /// PROJECT INTO AVG(e.data.salary)
+    /// ```
+    /// Valid usage:
+    /// ```eql
+    /// FROM e IN events
+    /// GROUP BY e.data.department
+    /// ORDER BY AVG(e.data.salary)
+    /// PROJECT INTO AVG(e.data.salary)
+    /// ```
+    #[error("{0}:{1}: expect aggregate expression")]
+    ExpectAggExpr(u32, u32),
 }
 
 impl From<LexerError> for Error {
