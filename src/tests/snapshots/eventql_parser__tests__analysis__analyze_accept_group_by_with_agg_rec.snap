@@ -1,0 +1,123 @@
+---
+source: src/tests/analysis.rs
+expression: "query.run_static_analysis(&Default::default())"
+---
+Ok:
+  attrs:
+    pos:
+      line: 2
+      col: 1
+  sources:
+    - binding:
+        name: e
+        pos:
+          line: 2
+          col: 6
+      kind:
+        Name: events
+  predicate: ~
+  group_by:
+    expr:
+      attrs:
+        pos:
+          line: 3
+          col: 10
+      value:
+        Access:
+          target:
+            attrs:
+              pos:
+                line: 3
+                col: 10
+            value:
+              Access:
+                target:
+                  attrs:
+                    pos:
+                      line: 3
+                      col: 10
+                  value:
+                    Id: e
+                field: data
+          field: department
+    predicate: ~
+  order_by: ~
+  limit: ~
+  projection:
+    attrs:
+      pos:
+        line: 4
+        col: 14
+    value:
+      Record:
+        - name: department
+          value:
+            attrs:
+              pos:
+                line: 5
+                col: 14
+            value:
+              App:
+                func: UNIQUE
+                args:
+                  - attrs:
+                      pos:
+                        line: 5
+                        col: 21
+                    value:
+                      Access:
+                        target:
+                          attrs:
+                            pos:
+                              line: 5
+                              col: 21
+                          value:
+                            Access:
+                              target:
+                                attrs:
+                                  pos:
+                                    line: 5
+                                    col: 21
+                                value:
+                                  Id: e
+                              field: data
+                        field: department
+        - name: cost
+          value:
+            attrs:
+              pos:
+                line: 6
+                col: 8
+            value:
+              App:
+                func: AVG
+                args:
+                  - attrs:
+                      pos:
+                        line: 6
+                        col: 12
+                    value:
+                      Access:
+                        target:
+                          attrs:
+                            pos:
+                              line: 6
+                              col: 12
+                          value:
+                            Access:
+                              target:
+                                attrs:
+                                  pos:
+                                    line: 6
+                                    col: 12
+                                value:
+                                  Id: e
+                              field: data
+                        field: salary
+  distinct: false
+  meta:
+    project:
+      Record:
+        cost: Number
+        department: Unspecified
+    aggregate: true

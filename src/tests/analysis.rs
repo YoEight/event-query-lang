@@ -235,3 +235,24 @@ fn test_analyze_accept_group_by_with_order_by_with_agg() {
     .unwrap();
     insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
 }
+
+#[test]
+fn test_analyze_reject_group_by_no_agg() {
+    let query = parse_query(include_str!("./resources/reject_group_by_no_agg.eql")).unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
+
+#[test]
+fn test_analyze_reject_group_by_no_agg_in_rec() {
+    let query = parse_query(include_str!(
+        "./resources/reject_group_by_no_agg_in_rec.eql"
+    ))
+    .unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
+
+#[test]
+fn test_analyze_accept_group_by_with_agg_rec() {
+    let query = parse_query(include_str!("./resources/accept_group_by_with_agg_rec.eql")).unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
