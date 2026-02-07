@@ -11,6 +11,7 @@ mod parser;
 #[cfg(test)]
 mod tests;
 mod token;
+mod arena;
 
 use crate::prelude::{parse, tokenize};
 pub use ast::*;

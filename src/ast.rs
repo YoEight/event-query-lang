@@ -16,7 +16,7 @@ use std::{
     fmt::{self, Display},
     mem,
 };
-
+use ordered_float::OrderedFloat;
 use crate::{
     analysis::{AnalysisOptions, Typed, static_analysis},
     error::{AnalysisError, Error},
@@ -467,7 +467,7 @@ impl Type {
 ///
 /// These attributes provide metadata about an expression, including its
 /// position in the source code, scope information, and type information.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct Attrs {
     /// Source position of this expression
     pub pos: Pos,
@@ -480,12 +480,18 @@ impl Attrs {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord,PartialOrd, Serialize)]
+pub struct ExprRef(usize);
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord,PartialOrd, Serialize)]
+pub struct ExprKey(usize);
+
 /// An expression with metadata.
 ///
 /// This is the fundamental building block of the AST. Every expression
 /// carries attributes (position, scope, type) and a value that determines
 /// what kind of expression it is.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize)]
 pub struct Expr {
     /// Metadata about this expression
     pub attrs: Attrs,
@@ -502,7 +508,7 @@ pub struct Expr {
 ///
 /// In the query `WHERE e.data.user.id == 1`, the expression `e.data.user.id`
 /// is parsed as nested `Access` nodes.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize)]
 pub struct Access {
     /// The target expression being accessed
     pub target: Box<Expr>,
@@ -517,7 +523,7 @@ pub struct Access {
 /// # Examples
 ///
 /// In the query `WHERE count(e.items) > 5`, the `count(e.items)` is an `App` node.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize)]
 pub struct App {
     /// Name of the function being called
     pub func: String,
@@ -528,7 +534,7 @@ pub struct App {
 /// A field in a record literal (e.g., `{name: "Alice", age: 30}`).
 ///
 /// Represents a key-value pair in a record construction.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize)]
 pub struct Field {
     /// Field name
     pub name: String,
@@ -545,7 +551,7 @@ pub struct Field {
 ///
 /// In `WHERE e.price > 100 AND e.active == true`, there are multiple
 /// binary operations: `>`, `==`, and `AND`.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize)]
 pub struct Binary {
     /// Left-hand side operand
     pub lhs: Box<Expr>,
@@ -562,7 +568,7 @@ pub struct Binary {
 /// # Examples
 ///
 /// In `WHERE NOT e.deleted`, the `NOT e.deleted` is a unary operation.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize)]
 pub struct Unary {
     /// The operator (Add for +, Sub for -, Not for NOT)
     pub operator: Operator,
@@ -574,10 +580,10 @@ pub struct Unary {
 ///
 /// This enum contains all the different types of expressions that can appear
 /// in an EventQL query, from simple literals to complex operations.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize)]
 pub enum Value {
     /// Numeric literal (e.g., `42`, `3.14`)
-    Number(f64),
+    Number(OrderedFloat<f64>),
     /// String literal (e.g., `"hello"`)
     String(String),
     /// Boolean literal (`true` or `false`)

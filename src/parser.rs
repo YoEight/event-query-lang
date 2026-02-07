@@ -288,7 +288,7 @@ impl<'a> Parser<'a> {
             }
 
             Sym::String(s) => Value::String(s.to_owned()),
-            Sym::Number(n) => Value::Number(n),
+            Sym::Number(n) => Value::Number(n.into()),
 
             Sym::Symbol(Symbol::OpenParen) => {
                 let expr = self.parse_expr()?;
