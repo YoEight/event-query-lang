@@ -1,0 +1,168 @@
+---
+source: src/tests/analysis.rs
+expression: "query.run_static_analysis(&Default::default())"
+---
+Ok:
+  attrs:
+    pos:
+      line: 1
+      col: 1
+  sources:
+    - binding:
+        name: e
+        pos:
+          line: 1
+          col: 6
+      kind:
+        Name: events
+  predicate: ~
+  group_by:
+    expr:
+      attrs:
+        pos:
+          line: 2
+          col: 10
+      value:
+        Access:
+          target:
+            attrs:
+              pos:
+                line: 2
+                col: 10
+            value:
+              Access:
+                target:
+                  attrs:
+                    pos:
+                      line: 2
+                      col: 10
+                  value:
+                    Id: e
+                field: data
+          field: department
+    predicate:
+      attrs:
+        pos:
+          line: 2
+          col: 35
+      value:
+        Binary:
+          lhs:
+            attrs:
+              pos:
+                line: 2
+                col: 35
+            value:
+              App:
+                func: AVG
+                args:
+                  - attrs:
+                      pos:
+                        line: 2
+                        col: 39
+                    value:
+                      Access:
+                        target:
+                          attrs:
+                            pos:
+                              line: 2
+                              col: 39
+                          value:
+                            Access:
+                              target:
+                                attrs:
+                                  pos:
+                                    line: 2
+                                    col: 39
+                                value:
+                                  Id: e
+                              field: data
+                        field: salary
+          operator: Gt
+          rhs:
+            attrs:
+              pos:
+                line: 2
+                col: 56
+            value:
+              Number: 10000
+  order_by: ~
+  limit: ~
+  projection:
+    attrs:
+      pos:
+        line: 3
+        col: 14
+    value:
+      Record:
+        - name: department
+          value:
+            attrs:
+              pos:
+                line: 4
+                col: 17
+            value:
+              App:
+                func: UNIQUE
+                args:
+                  - attrs:
+                      pos:
+                        line: 4
+                        col: 24
+                    value:
+                      Access:
+                        target:
+                          attrs:
+                            pos:
+                              line: 4
+                              col: 24
+                          value:
+                            Access:
+                              target:
+                                attrs:
+                                  pos:
+                                    line: 4
+                                    col: 24
+                                value:
+                                  Id: e
+                              field: data
+                        field: department
+        - name: average
+          value:
+            attrs:
+              pos:
+                line: 5
+                col: 14
+            value:
+              App:
+                func: AVG
+                args:
+                  - attrs:
+                      pos:
+                        line: 5
+                        col: 18
+                    value:
+                      Access:
+                        target:
+                          attrs:
+                            pos:
+                              line: 5
+                              col: 18
+                          value:
+                            Access:
+                              target:
+                                attrs:
+                                  pos:
+                                    line: 5
+                                    col: 18
+                                value:
+                                  Id: e
+                              field: data
+                        field: salary
+  distinct: false
+  meta:
+    project:
+      Record:
+        average: Number
+        department: Unspecified
+    aggregate: true

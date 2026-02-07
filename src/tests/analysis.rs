@@ -256,3 +256,15 @@ fn test_analyze_accept_group_by_with_agg_rec() {
     let query = parse_query(include_str!("./resources/accept_group_by_with_agg_rec.eql")).unwrap();
     insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
 }
+
+#[test]
+fn test_reject_invalid_having_clause() {
+    let query = parse_query(include_str!("./resources/reject_invalid_having_clause.eql")).unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
+
+#[test]
+fn test_accept_valid_having_clause() {
+    let query = parse_query(include_str!("./resources/valid_having_clause.eql")).unwrap();
+    insta::assert_yaml_snapshot!(query.run_static_analysis(&Default::default()));
+}
