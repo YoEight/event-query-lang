@@ -1,0 +1,6 @@
+FROM e IN events
+GROUP BY e.data.department HAVING e.data.salary > 10000
+PROJECT INTO {
+    department: UNIQUE(e.data.department),
+    average: AVG(e.data.salary)
+}

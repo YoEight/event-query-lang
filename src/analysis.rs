@@ -651,7 +651,16 @@ impl<'a> Analysis<'a> {
             self.analyze_expr(&mut ctx, &group_by.expr, Type::Unspecified)?;
 
             if let Some(expr) = &group_by.predicate {
+                ctx.allow_agg_func = true;
+                ctx.use_agg_funcs = true;
+
                 self.analyze_expr(&mut ctx, expr, Type::Bool)?;
+                if !self.expect_agg_expr(expr)? {
+                    return Err(AnalysisError::ExpectAggExpr(
+                        expr.attrs.pos.line,
+                        expr.attrs.pos.col,
+                    ));
+                }
             }
 
             ctx.allow_agg_func = true;
@@ -669,7 +678,7 @@ impl<'a> Analysis<'a> {
                     order_by.expr.attrs.pos.col,
                 ));
             } else if query.group_by.is_some() {
-                self.expect_agg_expr(&order_by.expr)?;
+                self.expect_agg_func(&order_by.expr)?;
             }
         }
 
@@ -903,7 +912,7 @@ impl<'a> Analysis<'a> {
                     }
 
                     if *aggregate {
-                        return self.expect_agg_expr(expr);
+                        return self.expect_agg_func(expr);
                     }
 
                     for arg in &app.args {
@@ -924,7 +933,7 @@ impl<'a> Analysis<'a> {
         }
     }
 
-    fn expect_agg_expr(&self, expr: &Expr) -> AnalysisResult<()> {
+    fn expect_agg_func(&self, expr: &Expr) -> AnalysisResult<()> {
         if let Value::App(app) = &expr.value
             && let Some(Type::App {
                 aggregate: true, ..
@@ -942,6 +951,42 @@ impl<'a> Analysis<'a> {
             expr.attrs.pos.line,
             expr.attrs.pos.col,
         ))
+    }
+
+    fn expect_agg_expr(&self, expr: &Expr) -> AnalysisResult<bool> {
+        match &expr.value {
+            Value::Id(id) => {
+                if self.scope.entries.contains_key(id.as_str()) {
+                    return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
+                        expr.attrs.pos.line,
+                        expr.attrs.pos.col,
+                    ));
+                }
+
+                Ok(false)
+            }
+            Value::Group(expr) => self.expect_agg_expr(expr),
+            Value::Binary(binary) => {
+                let lhs = self.expect_agg_expr(&binary.lhs)?;
+                let rhs = self.expect_agg_expr(&binary.rhs)?;
+
+                if !lhs && !rhs {
+                    return Err(AnalysisError::ExpectAggExpr(
+                        expr.attrs.pos.line,
+                        expr.attrs.pos.col,
+                    ));
+                }
+
+                Ok(true)
+            }
+            Value::Unary(unary) => self.expect_agg_expr(unary.expr.as_ref()),
+            Value::App(_) => {
+                self.expect_agg_func(expr)?;
+                Ok(true)
+            }
+
+            _ => Ok(false),
+        }
     }
 
     fn ensure_agg_param_is_source_bound(&self, expr: &Expr) -> AnalysisResult<()> {
