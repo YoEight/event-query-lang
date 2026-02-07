@@ -1172,7 +1172,7 @@ impl<'a> Analysis<'a> {
     /// let options = AnalysisOptions::default();
     /// let mut analysis = Analysis::new(&options);
     ///
-    /// let result = analysis.analyze_expr(&AnalysisContext::default(), &expr, Type::Number);
+    /// let result = analysis.analyze_expr(&mut AnalysisContext::default(), &expr, Type::Number);
     /// assert!(result.is_ok());
     /// ```
     pub fn analyze_expr(
@@ -1724,11 +1724,14 @@ impl<'a> Analysis<'a> {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```
+/// use eventql_parser::Type;
+/// use eventql_parser::prelude::{AnalysisOptions, name_to_type};
+///
 /// let opts = AnalysisOptions::default();
-/// assert_eq!(name_to_type(&opts, "String"), Some(Type::String));
-/// assert_eq!(name_to_type(&opts, "INT"), Some(Type::Number));
-/// assert_eq!(name_to_type(&opts, "unknown"), None);
+/// assert!(matches!(name_to_type(&opts, "String"), Some(Type::String)));
+/// assert!(matches!(name_to_type(&opts, "INT"), Some(Type::Number)));
+/// assert!(name_to_type(&opts, "unknown").is_none());
 /// ```
 pub fn name_to_type(opts: &AnalysisOptions, name: &str) -> Option<Type> {
     if name.eq_ignore_ascii_case("string") {

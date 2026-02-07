@@ -10,7 +10,7 @@ on:
       - "master"
 
   schedule:
-    - cron: "0 3 * * 0" # Every sunday at 3am UTC.
+    - cron: "0 3 * * 0" # Every Sunday at 3am UTC.
 
 env:
   CARGO_TERM_COLOR: always
@@ -38,6 +38,9 @@ jobs:
 
       - name: Run tests
         run: cargo nextest run --no-fail-fast --hide-progress-bar
+
+      - name: Run Doctests
+        run: cargo test --doc
 
   linting:
     needs: build
