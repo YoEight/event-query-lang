@@ -1,7 +1,7 @@
 use crate::arena::ExprArena;
 use crate::ast::{Binding, Expr, Limit, Order, Query};
 use crate::token::Operator;
-use crate::{Attrs, SourceKind, Value};
+use crate::{Attrs, ExprRef, SourceKind, Value};
 use ordered_float::OrderedFloat;
 use serde::Serialize;
 
@@ -38,6 +38,7 @@ pub enum ValueView {
 
 #[derive(Debug, Serialize)]
 pub struct FieldView {
+    pub attrs: Attrs,
     pub name: String,
     pub value: ExprView,
 }
@@ -105,9 +106,10 @@ pub struct OrderByView {
     pub order: Order,
 }
 
-impl Expr {
-    pub fn view(&self, arena: &ExprArena) -> ExprView {
-        let value = match arena.get(self.node_ref) {
+impl ExprRef {
+    pub fn view(self, arena: &ExprArena) -> ExprView {
+        let node = arena.get(self);
+        let value = match node.value {
             Value::Number(n) => ValueView::Number(*n),
             Value::String(s) => ValueView::String(s.clone()),
             Value::Bool(b) => ValueView::Bool(*b),
@@ -117,6 +119,7 @@ impl Expr {
                 fields
                     .iter()
                     .map(|f| FieldView {
+                        attrs: f.attrs,
                         name: f.name.clone(),
                         value: f.expr.view(arena),
                     })
@@ -142,7 +145,7 @@ impl Expr {
             Value::Group(expr) => ValueView::Group(Box::new(expr.view(arena))),
         };
 
-        ExprView::new(self.attrs, value)
+        ExprView::new(node.attrs, value)
     }
 }
 

@@ -15,7 +15,7 @@ use crate::ast::{
 };
 use crate::error::ParserError;
 use crate::token::{Operator, Sym, Symbol, Token};
-use crate::{Binding, GroupBy, Raw};
+use crate::{Binding, ExprRef, GroupBy, Raw};
 
 /// Result type for parser operations.
 ///
@@ -121,7 +121,7 @@ impl<'a> Parser<'a> {
         Ok(Source { binding, kind })
     }
 
-    fn parse_where_clause(&mut self) -> ParseResult<Expr> {
+    fn parse_where_clause(&mut self) -> ParseResult<ExprRef> {
         expect_keyword(self.shift(), "where")?;
         self.parse_expr()
     }
@@ -217,7 +217,7 @@ impl<'a> Parser<'a> {
     /// let tokens = tokenize("NOW()").unwrap();
     /// let expr = Parser::new(tokens.as_slice()).parse_expr().unwrap();
     /// ```
-    pub fn parse_expr(&mut self) -> ParseResult<Expr> {
+    pub fn parse_expr(&mut self) -> ParseResult<ExprRef> {
         let token = self.peek();
 
         match token.sym {
@@ -237,7 +237,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_primary(&mut self) -> ParseResult<Expr> {
+    fn parse_primary(&mut self) -> ParseResult<ExprRef> {
         let token = self.shift();
 
         let value = match token.sym {
@@ -270,21 +270,14 @@ impl<'a> Parser<'a> {
                     self.shift();
                     let attrs = token.into();
                     let mut access = Access {
-                        target: Expr {
-                            attrs,
-                            node_ref: self.arena.alloc(Value::Id(name.to_owned())),
-                        },
-
+                        target: self.arena.alloc(attrs, Value::Id(name.to_owned())),
                         field: self.parse_ident()?,
                     };
 
                     while matches!(self.peek().sym, Sym::Symbol(Symbol::Dot)) {
                         self.shift();
                         access = Access {
-                            target: Expr {
-                                attrs,
-                                node_ref: self.arena.alloc(Value::Access(access)),
-                            },
+                            target: self.arena.alloc(attrs, Value::Access(access)),
                             field: self.parse_ident()?,
                         };
                     }
@@ -326,20 +319,30 @@ impl<'a> Parser<'a> {
                 let mut fields = vec![];
 
                 if !matches!(self.peek().sym, Sym::Symbol(Symbol::CloseBrace)) {
+                    let attrs: Attrs = self.peek().into();
                     let name = self.parse_ident()?;
                     expect_symbol(self.shift(), Symbol::Colon)?;
                     let value = self.parse_expr()?;
 
-                    fields.push(Field { name, expr: value });
+                    fields.push(Field {
+                        attrs,
+                        name,
+                        expr: value,
+                    });
 
                     while matches!(self.peek().sym, Sym::Symbol(Symbol::Comma)) {
                         self.shift();
 
+                        let attrs: Attrs = self.peek().into();
                         let name = self.parse_ident()?;
                         expect_symbol(self.shift(), Symbol::Colon)?;
                         let value = self.parse_expr()?;
 
-                        fields.push(Field { name, expr: value });
+                        fields.push(Field {
+                            attrs,
+                            name,
+                            expr: value,
+                        });
                     }
                 }
 
@@ -366,14 +369,12 @@ impl<'a> Parser<'a> {
 
         let attrs = token.into();
 
-        Ok(Expr {
-            attrs,
-            node_ref: self.arena.alloc(value),
-        })
+        Ok(self.arena.alloc(attrs, value))
     }
 
-    fn parse_binary(&mut self, min_bind: u64) -> ParseResult<Expr> {
+    fn parse_binary(&mut self, min_bind: u64) -> ParseResult<ExprRef> {
         let mut lhs = self.parse_primary()?;
+        let lhs_attrs = self.arena.get(lhs).attrs;
 
         loop {
             let token = self.peek();
@@ -391,22 +392,18 @@ impl<'a> Parser<'a> {
 
             self.shift();
             let rhs = self.parse_binary(rhs_bind)?;
+            let node = self.arena.get(rhs);
 
-            if matches!(operator, Operator::As)
-                && !matches!(self.arena.get(rhs.node_ref), Value::Id(_))
-            {
+            if matches!(operator, Operator::As) && !matches!(node.value, Value::Id(_)) {
                 return Err(ParserError::ExpectedType(
-                    rhs.attrs.pos.line,
-                    rhs.attrs.pos.col,
+                    node.attrs.pos.line,
+                    node.attrs.pos.col,
                 ));
             }
 
-            lhs = Expr {
-                attrs: lhs.attrs,
-                node_ref: self
-                    .arena
-                    .alloc(Value::Binary(Binary { lhs, operator, rhs })),
-            };
+            lhs = self
+                .arena
+                .alloc(lhs_attrs, Value::Binary(Binary { lhs, operator, rhs }));
         }
 
         Ok(lhs)

@@ -362,7 +362,7 @@ impl Type {
     ///
     /// * If `self` is `Type::Unspecified` then `self` is updated to the more specific `Type`.
     /// * If `self` is `Type::Subject` and is checked against a `Type::String` then `self` is updated to `Type::String`
-    pub fn check(self, attrs: &Attrs, other: Type) -> Result<Type, AnalysisError> {
+    pub fn check(self, attrs: Attrs, other: Type) -> Result<Type, AnalysisError> {
         match (self, other) {
             (Self::Unspecified, other) => Ok(other),
             (this, Self::Unspecified) => Ok(this),
@@ -497,6 +497,7 @@ pub struct ExprKey(pub(crate) u64);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct ExprRef {
     pub(crate) key: ExprKey,
+    pub(crate) ptr: ExprPtr,
 }
 
 impl Hash for ExprRef {
@@ -536,7 +537,7 @@ impl Hash for Expr {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Access {
     /// The target expression being accessed
-    pub target: Expr,
+    pub target: ExprRef,
     /// The name of the field being accessed
     pub field: String,
 }
@@ -553,7 +554,7 @@ pub struct App {
     /// Name of the function being called
     pub func: String,
     /// Arguments passed to the function
-    pub args: Vec<Expr>,
+    pub args: Vec<ExprRef>,
 }
 
 /// A field in a record literal (e.g., `{name: "Alice", age: 30}`).
@@ -561,10 +562,12 @@ pub struct App {
 /// Represents a key-value pair in a record construction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Field {
+    /// Field attributes
+    pub attrs: Attrs,
     /// Field name
     pub name: String,
     /// Field value expression
-    pub expr: Expr,
+    pub expr: ExprRef,
 }
 
 /// Binary operation (e.g., `a + b`, `x == y`, `p AND q`).
@@ -579,11 +582,11 @@ pub struct Field {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct Binary {
     /// Left-hand side operand
-    pub lhs: Expr,
+    pub lhs: ExprRef,
     /// The operator
     pub operator: Operator,
     /// Right-hand side operand
-    pub rhs: Expr,
+    pub rhs: ExprRef,
 }
 
 /// Unary operation (e.g., `-x`, `NOT active`).
@@ -598,7 +601,7 @@ pub struct Unary {
     /// The operator (Add for +, Sub for -, Not for NOT)
     pub operator: Operator,
     /// The operand expression
-    pub expr: Expr,
+    pub expr: ExprRef,
 }
 
 /// The kind of value an expression represents.
@@ -616,7 +619,7 @@ pub enum Value {
     /// Identifier (e.g., variable name `e`, `x`)
     Id(String),
     /// Array literal (e.g., `[1, 2, 3]`)
-    Array(Vec<Expr>),
+    Array(Vec<ExprRef>),
     /// Record literal (e.g., `{name: "Alice", age: 30}`)
     Record(Vec<Field>),
     /// Field access (e.g., `e.data.price`)
@@ -628,7 +631,7 @@ pub enum Value {
     /// Unary operation (e.g., `-x`, `NOT active`)
     Unary(Unary),
     /// Grouped/parenthesized expression (e.g., `(a + b)`)
-    Group(Expr),
+    Group(ExprRef),
 }
 
 /// A source binding. A name attached to a source of events.
@@ -689,7 +692,7 @@ pub enum SourceKind<A> {
 #[derive(Debug, Clone, Serialize)]
 pub struct OrderBy {
     /// Expression to sort by
-    pub expr: Expr,
+    pub expr: ExprRef,
     /// Sort direction (ascending or descending)
     pub order: Order,
 }
@@ -716,10 +719,10 @@ pub enum Order {
 #[derive(Debug, Clone, Serialize)]
 pub struct GroupBy {
     /// Expression to group by
-    pub expr: Expr,
+    pub expr: ExprRef,
 
     /// Predicate to filter groups after aggregation
-    pub predicate: Option<Expr>,
+    pub predicate: Option<ExprRef>,
 }
 
 /// Result set limit specification.
@@ -788,7 +791,7 @@ pub struct Query<A> {
     /// FROM clause sources (must have at least one)
     pub sources: Vec<Source<A>>,
     /// Optional WHERE clause filter predicate
-    pub predicate: Option<Expr>,
+    pub predicate: Option<ExprRef>,
     /// Optional GROUP BY clause expression
     pub group_by: Option<GroupBy>,
     /// Optional ORDER BY clause
@@ -796,7 +799,7 @@ pub struct Query<A> {
     /// Optional LIMIT clause (TOP or SKIP)
     pub limit: Option<Limit>,
     /// PROJECT INTO clause expression (required)
-    pub projection: Expr,
+    pub projection: ExprRef,
     /// Remove duplicate rows from the query's results
     pub distinct: bool,
     /// Type-level metadata about the query's analysis state.
