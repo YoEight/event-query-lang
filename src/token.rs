@@ -64,7 +64,7 @@ impl Display for Sym<'_> {
 /// 3. Additive: `+`, `-`
 /// 4. Comparison: `<`, `<=`, `>`, `>=`, `==`, `!=`
 /// 5. Logical: `AND`, `OR`, `XOR`
-#[derive(Clone, Debug, Copy, PartialEq, Hash, Serialize)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum Operator {
     /// Addition operator `+`
     Add,

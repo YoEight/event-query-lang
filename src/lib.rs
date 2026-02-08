@@ -15,6 +15,7 @@ mod arena;
 
 use crate::prelude::{parse, tokenize};
 pub use ast::*;
+use crate::arena::ExprArena;
 
 /// Convenience module that re-exports all public types and functions.
 ///
@@ -61,7 +62,7 @@ pub type Result<A> = std::result::Result<A, error::Error>;
 ///     Err(e) => println!("Parse error: {}", e),
 /// }
 /// ```
-pub fn parse_query(input: &str) -> Result<Query<Raw>> {
+pub fn parse_query(arena: &mut ExprArena, input: &str) -> Result<Query<Raw>> {
     let tokens = tokenize(input)?;
-    Ok(parse(tokens.as_slice())?)
+    Ok(parse(arena, tokens.as_slice())?)
 }

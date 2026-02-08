@@ -8,6 +8,7 @@
 //!
 //! - [`parse`] - Convert a slice of tokens into a Query AST
 
+use crate::arena::ExprArena;
 use crate::ast::{
     Access, App, Attrs, Binary, Expr, Field, Limit, Order, OrderBy, Query, Source, SourceKind,
     Unary, Value,
@@ -27,6 +28,7 @@ pub type ParseResult<A> = Result<A, ParserError>;
 /// representing the structure of the EventQL query or expression.
 pub struct Parser<'a> {
     input: &'a [Token<'a>],
+    arena: &'a mut ExprArena,
     offset: usize,
 }
 
@@ -41,8 +43,12 @@ impl<'a> Parser<'a> {
     /// let tokens = tokenize("1 + 2").unwrap();
     /// let parser = Parser::new(tokens.as_slice());
     /// ```
-    pub fn new(input: &'a [Token<'a>]) -> Self {
-        Self { input, offset: 0 }
+    pub fn new(arena: &'a mut ExprArena, input: &'a [Token<'a>]) -> Self {
+        Self {
+            arena,
+            input,
+            offset: 0,
+        }
     }
 
     fn peek<'b>(&'b self) -> Token<'a> {
@@ -262,21 +268,23 @@ impl<'a> Parser<'a> {
                     })
                 } else if matches!(self.peek().sym, Sym::Symbol(Symbol::Dot)) {
                     self.shift();
+                    let attrs = token.into();
                     let mut access = Access {
-                        target: Box::new(Expr {
-                            attrs: Attrs::new(token.into()),
-                            value: Value::Id(name.to_owned()),
-                        }),
+                        target: Expr {
+                            attrs,
+                            node_ref: self.arena.alloc(attrs, Value::Id(name.to_owned())),
+                        },
+
                         field: self.parse_ident()?,
                     };
 
                     while matches!(self.peek().sym, Sym::Symbol(Symbol::Dot)) {
                         self.shift();
                         access = Access {
-                            target: Box::new(Expr {
-                                attrs: access.target.attrs,
-                                value: Value::Access(access),
-                            }),
+                            target: Expr {
+                                attrs,
+                                node_ref: self.arena.alloc(attrs, Value::Access(access)),
+                            },
                             field: self.parse_ident()?,
                         };
                     }
@@ -294,7 +302,7 @@ impl<'a> Parser<'a> {
                 let expr = self.parse_expr()?;
                 expect_symbol(self.shift(), Symbol::CloseParen)?;
 
-                Value::Group(Box::new(expr))
+                Value::Group(expr)
             }
 
             Sym::Symbol(Symbol::OpenBracket) => {
@@ -322,7 +330,7 @@ impl<'a> Parser<'a> {
                     expect_symbol(self.shift(), Symbol::Colon)?;
                     let value = self.parse_expr()?;
 
-                    fields.push(Field { name, value });
+                    fields.push(Field { name, expr: value });
 
                     while matches!(self.peek().sym, Sym::Symbol(Symbol::Comma)) {
                         self.shift();
@@ -331,7 +339,7 @@ impl<'a> Parser<'a> {
                         expect_symbol(self.shift(), Symbol::Colon)?;
                         let value = self.parse_expr()?;
 
-                        fields.push(Field { name, value });
+                        fields.push(Field { name, expr: value });
                     }
                 }
 
@@ -343,7 +351,7 @@ impl<'a> Parser<'a> {
             Sym::Operator(op) if matches!(op, Operator::Add | Operator::Sub | Operator::Not) => {
                 Value::Unary(Unary {
                     operator: op,
-                    expr: Box::new(self.parse_expr()?),
+                    expr: self.parse_expr()?,
                 })
             }
 
@@ -356,9 +364,11 @@ impl<'a> Parser<'a> {
             }
         };
 
+        let attrs = token.into();
+
         Ok(Expr {
-            attrs: Attrs::new(token.into()),
-            value,
+            attrs,
+            node_ref: self.arena.alloc(attrs, value),
         })
     }
 
@@ -382,7 +392,9 @@ impl<'a> Parser<'a> {
             self.shift();
             let rhs = self.parse_binary(rhs_bind)?;
 
-            if matches!(operator, Operator::As) && !matches!(rhs.value, Value::Id(_)) {
+            if matches!(operator, Operator::As)
+                && !matches!(self.arena.get_value(rhs.node_ref), Value::Id(_))
+            {
                 return Err(ParserError::ExpectedType(
                     rhs.attrs.pos.line,
                     rhs.attrs.pos.col,
@@ -391,11 +403,9 @@ impl<'a> Parser<'a> {
 
             lhs = Expr {
                 attrs: lhs.attrs,
-                value: Value::Binary(Binary {
-                    lhs: Box::new(lhs),
-                    operator,
-                    rhs: Box::new(rhs),
-                }),
+                node_ref: self
+                    .arena
+                    .alloc(lhs.attrs, Value::Binary(Binary { lhs, operator, rhs })),
             };
         }
 
@@ -556,8 +566,8 @@ fn binding_pow(op: Operator) -> (u64, u64) {
 /// 3. Additive (`+`, `-`)
 /// 4. Comparison (`<`, `<=`, `>`, `>=`, `==`, `!=`)
 /// 5. Logical (`AND`, `OR`, `XOR`)
-pub fn parse<'a>(input: &'a [Token<'a>]) -> ParseResult<Query<Raw>> {
-    let mut parser = Parser::new(input);
+pub fn parse<'a>(arena: &'a mut ExprArena, input: &'a [Token<'a>]) -> ParseResult<Query<Raw>> {
+    let mut parser = Parser::new(arena, input);
 
     parser.parse_query()
 }
