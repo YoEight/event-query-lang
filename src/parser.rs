@@ -272,7 +272,7 @@ impl<'a> Parser<'a> {
                     let mut access = Access {
                         target: Expr {
                             attrs,
-                            node_ref: self.arena.alloc(attrs, Value::Id(name.to_owned())),
+                            node_ref: self.arena.alloc(Value::Id(name.to_owned())),
                         },
 
                         field: self.parse_ident()?,
@@ -283,7 +283,7 @@ impl<'a> Parser<'a> {
                         access = Access {
                             target: Expr {
                                 attrs,
-                                node_ref: self.arena.alloc(attrs, Value::Access(access)),
+                                node_ref: self.arena.alloc(Value::Access(access)),
                             },
                             field: self.parse_ident()?,
                         };
@@ -368,7 +368,7 @@ impl<'a> Parser<'a> {
 
         Ok(Expr {
             attrs,
-            node_ref: self.arena.alloc(attrs, value),
+            node_ref: self.arena.alloc(value),
         })
     }
 
@@ -393,7 +393,7 @@ impl<'a> Parser<'a> {
             let rhs = self.parse_binary(rhs_bind)?;
 
             if matches!(operator, Operator::As)
-                && !matches!(self.arena.get_value(rhs.node_ref), Value::Id(_))
+                && !matches!(self.arena.get(rhs.node_ref), Value::Id(_))
             {
                 return Err(ParserError::ExpectedType(
                     rhs.attrs.pos.line,
@@ -405,7 +405,7 @@ impl<'a> Parser<'a> {
                 attrs: lhs.attrs,
                 node_ref: self
                     .arena
-                    .alloc(lhs.attrs, Value::Binary(Binary { lhs, operator, rhs })),
+                    .alloc(Value::Binary(Binary { lhs, operator, rhs })),
             };
         }
 

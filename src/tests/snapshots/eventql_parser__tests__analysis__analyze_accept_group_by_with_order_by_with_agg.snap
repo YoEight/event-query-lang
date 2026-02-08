@@ -1,6 +1,6 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.run_static_analysis(&Default::default())"
+expression: "query.run_static_analysis(&arena, &Default::default())"
 ---
 Ok:
   attrs:
@@ -22,24 +22,9 @@ Ok:
         pos:
           line: 2
           col: 10
-      value:
-        Access:
-          target:
-            attrs:
-              pos:
-                line: 2
-                col: 10
-            value:
-              Access:
-                target:
-                  attrs:
-                    pos:
-                      line: 2
-                      col: 10
-                  value:
-                    Id: e
-                field: data
-          field: department
+      node_ref:
+        ptr: 2
+        key: 16817656567714378052
     predicate: ~
   order_by:
     expr:
@@ -47,32 +32,9 @@ Ok:
         pos:
           line: 3
           col: 10
-      value:
-        App:
-          func: AVG
-          args:
-            - attrs:
-                pos:
-                  line: 3
-                  col: 14
-              value:
-                Access:
-                  target:
-                    attrs:
-                      pos:
-                        line: 3
-                        col: 14
-                    value:
-                      Access:
-                        target:
-                          attrs:
-                            pos:
-                              line: 3
-                              col: 14
-                          value:
-                            Id: e
-                        field: data
-                  field: salary
+      node_ref:
+        ptr: 6
+        key: 577847590807366763
     order: Asc
   limit: ~
   projection:
@@ -80,32 +42,9 @@ Ok:
       pos:
         line: 4
         col: 14
-    value:
-      App:
-        func: AVG
-        args:
-          - attrs:
-              pos:
-                line: 4
-                col: 18
-            value:
-              Access:
-                target:
-                  attrs:
-                    pos:
-                      line: 4
-                      col: 18
-                  value:
-                    Access:
-                      target:
-                        attrs:
-                          pos:
-                            line: 4
-                            col: 18
-                        value:
-                          Id: e
-                      field: data
-                field: salary
+    node_ref:
+      ptr: 10
+      key: 577847590807366763
   distinct: false
   meta:
     project: Number

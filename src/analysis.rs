@@ -10,7 +10,7 @@ use unicase::Ascii;
 
 use crate::arena::ExprArena;
 use crate::{
-    App, Attrs, Binary, Expr, ExprRef, Field, FunArgs, Query, Raw, Source, SourceKind, Type, Value,
+    App, Attrs, Binary, Expr, Field, FunArgs, Query, Raw, Source, SourceKind, Type, Value,
     error::AnalysisError, token::Operator,
 };
 
@@ -646,7 +646,7 @@ impl<'a> Analysis<'a> {
 
         if let Some(group_by) = &query.group_by {
             if !matches!(
-                self.arena.get_value(group_by.expr.node_ref),
+                self.arena.get(group_by.expr.node_ref),
                 Value::Access(_)
             ) {
                 return Err(AnalysisError::ExpectFieldLiteral(
@@ -681,7 +681,7 @@ impl<'a> Analysis<'a> {
 
             if query.group_by.is_none()
                 && !matches!(
-                    self.arena.get_value(order_by.expr.node_ref),
+                    self.arena.get(order_by.expr.node_ref),
                     Value::Access(_)
                 )
             {
@@ -755,7 +755,7 @@ impl<'a> Analysis<'a> {
         ctx: &mut AnalysisContext,
         expr: Expr,
     ) -> AnalysisResult<Type> {
-        match self.arena.get_value(expr.node_ref) {
+        match self.arena.get(expr.node_ref) {
             Value::Record(record) => {
                 if record.is_empty() {
                     return Err(AnalysisError::EmptyRecord(
@@ -817,7 +817,7 @@ impl<'a> Analysis<'a> {
             )),
 
             Value::Access(access) => {
-                let mut current = self.arena.get_value(access.target.node_ref);
+                let mut current = self.arena.get(access.target.node_ref);
 
                 loop {
                     match current {
@@ -833,7 +833,7 @@ impl<'a> Analysis<'a> {
                             break;
                         }
 
-                        Value::Access(next) => current = self.arena.get_value(next.target.node_ref),
+                        Value::Access(next) => current = self.arena.get(next.target.node_ref),
                         _ => unreachable!(),
                     }
                 }
@@ -874,7 +874,7 @@ impl<'a> Analysis<'a> {
         ctx: &mut CheckContext,
         expr: Expr,
     ) -> AnalysisResult<()> {
-        match self.arena.get_value(expr.node_ref) {
+        match self.arena.get(expr.node_ref) {
             Value::Number(_) | Value::String(_) | Value::Bool(_) => Ok(()),
 
             Value::Id(id) => {
@@ -946,7 +946,7 @@ impl<'a> Analysis<'a> {
     }
 
     fn expect_agg_func(&self, expr: Expr) -> AnalysisResult<()> {
-        if let Value::App(app) = self.arena.get_value(expr.node_ref)
+        if let Value::App(app) = self.arena.get(expr.node_ref)
             && let Some(Type::App {
                 aggregate: true, ..
             }) = self.options.default_scope.entries.get(app.func.as_str())
@@ -966,7 +966,7 @@ impl<'a> Analysis<'a> {
     }
 
     fn expect_agg_expr(&self, expr: Expr) -> AnalysisResult<bool> {
-        match self.arena.get_value(expr.node_ref) {
+        match self.arena.get(expr.node_ref) {
             Value::Id(id) => {
                 if self.scope.entries.contains_key(id.as_str()) {
                     return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
@@ -1002,7 +1002,7 @@ impl<'a> Analysis<'a> {
     }
 
     fn ensure_agg_param_is_source_bound(&self, expr: Expr) -> AnalysisResult<()> {
-        match self.arena.get_value(expr.node_ref) {
+        match self.arena.get(expr.node_ref) {
             Value::Id(id) if !self.options.default_scope.entries.contains_key(id.as_str()) => {
                 Ok(())
             }
@@ -1035,7 +1035,7 @@ impl<'a> Analysis<'a> {
     }
 
     fn ensure_agg_binary_op_branch_is_source_bound(&self, expr: &Expr) -> bool {
-        match self.arena.get_value(expr.node_ref) {
+        match self.arena.get(expr.node_ref) {
             Value::Id(id) => !self.options.default_scope.entries.contains_key(id.as_str()),
             Value::Array(exprs) => {
                 if exprs.is_empty() {
@@ -1070,7 +1070,7 @@ impl<'a> Analysis<'a> {
     }
 
     fn invalidate_agg_func_usage(&self, expr: Expr) -> AnalysisResult<()> {
-        match self.arena.get_value(expr.node_ref) {
+        match self.arena.get(expr.node_ref) {
             Value::Number(_)
             | Value::String(_)
             | Value::Bool(_)
@@ -1148,7 +1148,7 @@ impl<'a> Analysis<'a> {
     }
 
     fn reject_constant_expr(&self, expr: Expr) -> AnalysisResult<()> {
-        match self.arena.get_value(expr.node_ref) {
+        match self.arena.get(expr.node_ref) {
             Value::Id(id) if self.scope.entries.contains_key(id.as_str()) => Ok(()),
 
             Value::Array(exprs) => {
@@ -1238,7 +1238,7 @@ impl<'a> Analysis<'a> {
         expr: Expr,
         mut expect: Type,
     ) -> AnalysisResult<Type> {
-        match self.arena.get_value(expr.node_ref) {
+        match self.arena.get(expr.node_ref) {
             Value::Number(_) => expect.check(&expr.attrs, Type::Number),
             Value::String(_) => expect.check(&expr.attrs, Type::String),
             Value::Bool(_) => expect.check(&expr.attrs, Type::Bool),
@@ -1330,7 +1330,7 @@ impl<'a> Analysis<'a> {
                 }
             }
 
-            this @ Value::Access(_) => Ok(self.analyze_access(&expr.attrs, expr, expect)?),
+            Value::Access(_) => Ok(self.analyze_access(&expr.attrs, expr, expect)?),
 
             Value::App(app) => {
                 if let Some(tpe) = self.options.default_scope.entries.get(app.func.as_str())
@@ -1444,7 +1444,7 @@ impl<'a> Analysis<'a> {
                 }
 
                 Operator::As => {
-                    if let Value::Id(name) = self.arena.get_value(binary.rhs.node_ref) {
+                    if let Value::Id(name) = self.arena.get(binary.rhs.node_ref) {
                         if let Some(tpe) = name_to_type(self.options, name) {
                             // NOTE - we could check if it's safe to convert the left branch to that type
                             return Ok(tpe);
@@ -1518,7 +1518,7 @@ impl<'a> Analysis<'a> {
             attrs: &'a Attrs,
             expr: Expr,
         ) -> AnalysisResult<State<&'a mut Type, &'a Type>> {
-            match arena.get_value(expr.node_ref) {
+            match arena.get(expr.node_ref) {
                 Value::Id(id) => {
                     if let Some(tpe) = sys.default_scope.entries.get(id.as_str()) {
                         Ok(State::new(Def::System(tpe)))
@@ -1664,7 +1664,7 @@ impl<'a> Analysis<'a> {
     }
 
     fn project_type(&self, node: Expr) -> Type {
-        match self.arena.get_value(node.node_ref) {
+        match self.arena.get(node.node_ref) {
             Value::Number(_) => Type::Number,
             Value::String(_) => Type::String,
             Value::Bool(_) => Type::Bool,
@@ -1718,7 +1718,7 @@ impl<'a> Analysis<'a> {
             Value::Binary(binary) => match binary.operator {
                 Operator::Add | Operator::Sub | Operator::Mul | Operator::Div => Type::Number,
                 Operator::As => {
-                    if let Value::Id(n) = self.arena.get_value(binary.rhs.node_ref)
+                    if let Value::Id(n) = self.arena.get(binary.rhs.node_ref)
                         && let Some(tpe) = name_to_type(self.options, n.as_str())
                     {
                         tpe

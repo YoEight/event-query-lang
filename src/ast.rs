@@ -496,7 +496,6 @@ pub struct ExprKey(pub(crate) u64);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord,PartialOrd, Serialize)]
 pub struct ExprRef {
-    pub(crate) ptr: ExprPtr,
     pub(crate) key: ExprKey,
 }
 

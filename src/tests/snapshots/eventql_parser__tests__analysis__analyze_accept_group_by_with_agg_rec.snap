@@ -1,6 +1,6 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.run_static_analysis(&Default::default())"
+expression: "query.run_static_analysis(&arena, &Default::default())"
 ---
 Ok:
   attrs:
@@ -22,24 +22,9 @@ Ok:
         pos:
           line: 3
           col: 10
-      value:
-        Access:
-          target:
-            attrs:
-              pos:
-                line: 3
-                col: 10
-            value:
-              Access:
-                target:
-                  attrs:
-                    pos:
-                      line: 3
-                      col: 10
-                  value:
-                    Id: e
-                field: data
-          field: department
+      node_ref:
+        ptr: 2
+        key: 16053462065367168875
     predicate: ~
   order_by: ~
   limit: ~
@@ -48,72 +33,9 @@ Ok:
       pos:
         line: 4
         col: 14
-    value:
-      Record:
-        - name: department
-          value:
-            attrs:
-              pos:
-                line: 5
-                col: 14
-            value:
-              App:
-                func: UNIQUE
-                args:
-                  - attrs:
-                      pos:
-                        line: 5
-                        col: 21
-                    value:
-                      Access:
-                        target:
-                          attrs:
-                            pos:
-                              line: 5
-                              col: 21
-                          value:
-                            Access:
-                              target:
-                                attrs:
-                                  pos:
-                                    line: 5
-                                    col: 21
-                                value:
-                                  Id: e
-                              field: data
-                        field: department
-        - name: cost
-          value:
-            attrs:
-              pos:
-                line: 6
-                col: 8
-            value:
-              App:
-                func: AVG
-                args:
-                  - attrs:
-                      pos:
-                        line: 6
-                        col: 12
-                    value:
-                      Access:
-                        target:
-                          attrs:
-                            pos:
-                              line: 6
-                              col: 12
-                          value:
-                            Access:
-                              target:
-                                attrs:
-                                  pos:
-                                    line: 6
-                                    col: 12
-                                value:
-                                  Id: e
-                              field: data
-                        field: salary
+    node_ref:
+      ptr: 11
+      key: 5601335444046513008
   distinct: false
   meta:
     project:
