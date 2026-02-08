@@ -1,11 +1,8 @@
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashSet, btree_map::Entry},
-    mem,
-};
-
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use serde::{Serialize, ser::SerializeMap};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::{borrow::Cow, collections::HashSet, mem};
 use unicase::Ascii;
 
 use crate::arena::ExprArena;
@@ -431,7 +428,7 @@ impl Default for AnalysisOptions {
                     ),
                 ]),
             },
-            event_type_info: Type::Record(BTreeMap::from([
+            event_type_info: Type::Record(HashMap::from([
                 ("specversion".to_owned(), Type::String),
                 ("id".to_owned(), Type::String),
                 ("time".to_owned(), Type::DateTime),
@@ -1293,7 +1290,7 @@ impl<'a> Analysis<'a> {
 
             Value::Record(fields) => {
                 if matches!(expect, Type::Unspecified) {
-                    let mut record = BTreeMap::new();
+                    let mut record = HashMap::new();
 
                     for field in fields {
                         record.insert(
@@ -1553,7 +1550,7 @@ impl<'a> Analysis<'a> {
                     match state.definition {
                         Def::User(tpe) => {
                             if matches!(tpe, Type::Unspecified) && state.dynamic {
-                                *tpe = Type::Record(BTreeMap::from([(
+                                *tpe = Type::Record(HashMap::from([(
                                     access.field.clone(),
                                     Type::Unspecified,
                                 )]));

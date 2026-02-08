@@ -19,9 +19,9 @@ use crate::{
 };
 use ordered_float::OrderedFloat;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::{
-    collections::BTreeMap,
     fmt::{self, Display},
     mem,
 };
@@ -176,7 +176,7 @@ pub enum Type {
     /// Array type
     Array(Box<Type>),
     /// Record (object) type
-    Record(BTreeMap<String, Type>),
+    Record(HashMap<String, Type>),
     /// Subject pattern type
     Subject,
     /// Function type with support for optional parameters.
@@ -350,7 +350,7 @@ impl Display for Type {
 }
 
 impl Type {
-    pub fn as_record_or_panic_mut(&mut self) -> &mut BTreeMap<String, Type> {
+    pub fn as_record_or_panic_mut(&mut self) -> &mut HashMap<String, Type> {
         if let Self::Record(r) = self {
             return r;
         }
@@ -399,8 +399,8 @@ impl Type {
                     return Ok(Self::Record(a));
                 }
 
-                for (ak, bk) in a.keys().zip(b.keys()) {
-                    if ak != bk {
+                for bk in b.keys() {
+                    if !a.contains_key(bk) {
                         return Err(AnalysisError::TypeMismatch(
                             attrs.pos.line,
                             attrs.pos.col,
@@ -410,7 +410,8 @@ impl Type {
                     }
                 }
 
-                for (av, bv) in a.values_mut().zip(b.into_values()) {
+                for (bk, bv) in b.into_iter() {
+                    let av = a.get_mut(&bk).unwrap();
                     let a = mem::take(av);
                     *av = a.check(attrs, bv)?;
                 }
