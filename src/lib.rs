@@ -4,6 +4,7 @@
 //! designed for event sourcing systems. It allows you to parse EQL query strings into
 //! an abstract syntax tree (AST) that can be analyzed or executed.
 mod analysis;
+mod arena;
 mod ast;
 mod error;
 mod lexer;
@@ -11,11 +12,10 @@ mod parser;
 #[cfg(test)]
 mod tests;
 mod token;
-mod arena;
 
+use crate::arena::ExprArena;
 use crate::prelude::{parse, tokenize};
 pub use ast::*;
-use crate::arena::ExprArena;
 
 /// Convenience module that re-exports all public types and functions.
 ///

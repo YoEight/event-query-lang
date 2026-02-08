@@ -1,9 +1,8 @@
-use std::collections::hash_map::Entry;
-use std::hash::{BuildHasher};
+use crate::{ExprKey, ExprRef, Value};
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::Serialize;
-use crate::{ExprKey, ExprRef, Value};
-
+use std::collections::hash_map::Entry;
+use std::hash::BuildHasher;
 
 #[derive(Default, Serialize)]
 pub struct ExprArena {
@@ -16,13 +15,11 @@ impl ExprArena {
     pub fn alloc(&mut self, value: Value) -> ExprRef {
         let key = ExprKey(self.hasher.hash_one(&value));
 
-        if let Entry::Vacant(entry) =self.slots.entry(key.0) {
+        if let Entry::Vacant(entry) = self.slots.entry(key.0) {
             entry.insert(value);
         }
 
-        ExprRef {
-            key,
-        }
+        ExprRef { key }
     }
 
     pub fn get(&self, key: ExprRef) -> &Value {

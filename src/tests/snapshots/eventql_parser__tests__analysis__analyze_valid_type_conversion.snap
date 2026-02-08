@@ -1,73 +1,74 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.run_static_analysis(&Default::default())"
+expression: "query.map(|q|\n{\n    q.run_static_analysis(&arena, &Default::default()).map(|q| q.view(&arena))\n})"
 ---
 Ok:
-  attrs:
-    pos:
-      line: 1
-      col: 1
-  sources:
-    - binding:
-        name: e
-        pos:
-          line: 1
-          col: 6
-      kind:
-        Name: events
-  predicate: ~
-  group_by: ~
-  order_by: ~
-  limit: ~
-  projection:
+  Ok:
     attrs:
       pos:
-        line: 2
-        col: 14
-    value:
-      Record:
-        - name: date
-          value:
-            attrs:
-              pos:
-                line: 2
-                col: 22
+        line: 1
+        col: 1
+    sources:
+      - binding:
+          name: e
+          pos:
+            line: 1
+            col: 6
+        kind:
+          Name: events
+    predicate: ~
+    group_by: ~
+    order_by: ~
+    limit: ~
+    projection:
+      attrs:
+        pos:
+          line: 2
+          col: 14
+      value:
+        Record:
+          - name: date
             value:
-              Binary:
-                lhs:
-                  attrs:
-                    pos:
-                      line: 2
-                      col: 22
-                  value:
-                    Access:
-                      target:
-                        attrs:
-                          pos:
-                            line: 2
-                            col: 22
-                        value:
-                          Access:
-                            target:
-                              attrs:
-                                pos:
-                                  line: 2
-                                  col: 22
-                              value:
-                                Id: e
-                            field: data
-                      field: date
-                operator: As
-                rhs:
-                  attrs:
-                    pos:
-                      line: 2
-                      col: 37
-                  value:
-                    Id: DATETIME
-  distinct: false
-  meta:
-    project:
-      Record:
-        date: DateTime
-    aggregate: false
+              attrs:
+                pos:
+                  line: 2
+                  col: 22
+              value:
+                Binary:
+                  lhs:
+                    attrs:
+                      pos:
+                        line: 2
+                        col: 22
+                    value:
+                      Access:
+                        target:
+                          attrs:
+                            pos:
+                              line: 2
+                              col: 22
+                          value:
+                            Access:
+                              target:
+                                attrs:
+                                  pos:
+                                    line: 2
+                                    col: 22
+                                value:
+                                  Id: e
+                              field: data
+                        field: date
+                  operator: As
+                  rhs:
+                    attrs:
+                      pos:
+                        line: 2
+                        col: 37
+                    value:
+                      Id: DATETIME
+    distinct: false
+    meta:
+      project:
+        Record:
+          date: DateTime
+      aggregate: false

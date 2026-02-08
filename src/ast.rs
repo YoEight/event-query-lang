@@ -11,20 +11,20 @@
 //! - [`Value`] - The various kinds of expression values (literals, operators, etc.)
 //! - [`Source`] - Data sources in FROM clauses
 //!
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Display},
-    mem,
-};
-use std::hash::{Hash, Hasher};
-use ordered_float::OrderedFloat;
+use crate::arena::ExprArena;
 use crate::{
     analysis::{AnalysisOptions, Typed, static_analysis},
     error::{AnalysisError, Error},
     token::{Operator, Token},
 };
+use ordered_float::OrderedFloat;
 use serde::Serialize;
-use crate::arena::ExprArena;
+use std::hash::{Hash, Hasher};
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Display},
+    mem,
+};
 
 /// Position information for source code locations.
 ///
@@ -488,13 +488,13 @@ impl<'a> From<Token<'a>> for Attrs {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord,PartialOrd, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct ExprPtr(pub(crate) usize);
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord,PartialOrd, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct ExprKey(pub(crate) u64);
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord,PartialOrd, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct ExprRef {
     pub(crate) key: ExprKey,
 }
@@ -835,7 +835,11 @@ impl Query<Raw> {
     /// # Returns
     ///
     /// Returns a typed query on success, or an error if type checking fails.
-    pub fn run_static_analysis(self, arena: &ExprArena, options: &AnalysisOptions) -> crate::Result<Query<Typed>> {
+    pub fn run_static_analysis(
+        self,
+        arena: &ExprArena,
+        options: &AnalysisOptions,
+    ) -> crate::Result<Query<Typed>> {
         static_analysis(arena, options, self).map_err(Error::Analysis)
     }
 }

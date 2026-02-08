@@ -1,6 +1,6 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.run_static_analysis(&arena, &Default::default())"
+expression: "query.and_then(|q|\n{\n    q.run_static_analysis(&arena, &Default::default()).map(|q| q.view(&arena))\n})"
 ---
 Ok:
   attrs:
@@ -24,9 +24,10 @@ Ok:
       pos:
         line: 2
         col: 14
-    node_ref:
-      ptr: 0
-      key: 9971702580483117551
+    value:
+      App:
+        func: count
+        args: []
   distinct: false
   meta:
     project: Number

@@ -645,10 +645,7 @@ impl<'a> Analysis<'a> {
         }
 
         if let Some(group_by) = &query.group_by {
-            if !matches!(
-                self.arena.get(group_by.expr.node_ref),
-                Value::Access(_)
-            ) {
+            if !matches!(self.arena.get(group_by.expr.node_ref), Value::Access(_)) {
                 return Err(AnalysisError::ExpectFieldLiteral(
                     group_by.expr.attrs.pos.line,
                     group_by.expr.attrs.pos.col,
@@ -680,10 +677,7 @@ impl<'a> Analysis<'a> {
             self.analyze_expr(&mut ctx, order_by.expr, Type::Unspecified)?;
 
             if query.group_by.is_none()
-                && !matches!(
-                    self.arena.get(order_by.expr.node_ref),
-                    Value::Access(_)
-                )
+                && !matches!(self.arena.get(order_by.expr.node_ref), Value::Access(_))
             {
                 return Err(AnalysisError::ExpectFieldLiteral(
                     order_by.expr.attrs.pos.line,

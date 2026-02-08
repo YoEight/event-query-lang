@@ -39,7 +39,7 @@ pub enum ValueView {
 #[derive(Debug, Serialize)]
 pub struct FieldView {
     pub name: String,
-    pub expr: ExprView,
+    pub value: ExprView,
 }
 
 #[derive(Debug, Serialize)]
@@ -68,28 +68,29 @@ pub struct UnaryView {
 }
 
 #[derive(Debug, Serialize)]
-pub struct QueryView {
+pub struct QueryView<A> {
     pub attrs: Attrs,
-    pub sources: Vec<SourceView>,
+    pub sources: Vec<SourceView<A>>,
     pub predicate: Option<ExprView>,
     pub group_by: Option<GroupByView>,
     pub order_by: Option<OrderByView>,
     pub limit: Option<Limit>,
     pub projection: ExprView,
     pub distinct: bool,
+    pub meta: A,
 }
 
 #[derive(Debug, Serialize)]
-pub struct SourceView {
+pub struct SourceView<A> {
     pub binding: Binding,
-    pub kind: SourceKindView,
+    pub kind: SourceKindView<A>,
 }
 
 #[derive(Debug, Serialize)]
-pub enum SourceKindView {
+pub enum SourceKindView<A> {
     Name(String),
     Subject(String),
-    Subquery(Box<QueryView>),
+    Subquery(Box<QueryView<A>>),
 }
 
 #[derive(Debug, Serialize)]
@@ -117,7 +118,7 @@ impl Expr {
                     .iter()
                     .map(|f| FieldView {
                         name: f.name.clone(),
-                        expr: f.expr.view(arena),
+                        value: f.expr.view(arena),
                     })
                     .collect(),
             ),
@@ -146,34 +147,35 @@ impl Expr {
 }
 
 impl<A> Query<A> {
-    pub fn view(&self, arena: &ExprArena) -> QueryView {
+    pub fn view(self, arena: &ExprArena) -> QueryView<A> {
         QueryView {
             attrs: self.attrs,
             sources: self
                 .sources
-                .iter()
+                .into_iter()
                 .map(|s| SourceView {
                     binding: s.binding.clone(),
-                    kind: match &s.kind {
-                        SourceKind::Name(name) => SourceKindView::Name(name.clone()),
-                        SourceKind::Subject(subject) => SourceKindView::Subject(subject.clone()),
+                    kind: match s.kind {
+                        SourceKind::Name(name) => SourceKindView::Name(name),
+                        SourceKind::Subject(subject) => SourceKindView::Subject(subject),
                         SourceKind::Subquery(subquery) => {
                             SourceKindView::Subquery(Box::new(subquery.view(arena)))
                         }
                     },
                 })
                 .collect(),
-            predicate: self.predicate.as_ref().map(|e| e.view(arena)),
-            group_by: self.group_by.as_ref().map(|g| GroupByView {
+            predicate: self.predicate.map(|e| e.view(arena)),
+            group_by: self.group_by.map(|g| GroupByView {
                 expr: g.expr.view(arena),
-                predicate: g.predicate.as_ref().map(|e| e.view(arena)),
+                predicate: g.predicate.map(|e| e.view(arena)),
             }),
-            order_by: self.order_by.as_ref().map(|o| OrderByView {
+            order_by: self.order_by.map(|o| OrderByView {
                 expr: o.expr.view(arena),
                 order: o.order,
             }),
             limit: self.limit,
             projection: self.projection.view(arena),
+            meta: self.meta,
             distinct: self.distinct,
         }
     }
