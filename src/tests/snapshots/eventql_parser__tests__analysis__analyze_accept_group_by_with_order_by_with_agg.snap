@@ -67,8 +67,8 @@ Ok:
                         target:
                           attrs:
                             pos:
-                              line: 2
-                              col: 10
+                              line: 3
+                              col: 14
                           value:
                             Id: e
                         field: data
@@ -86,22 +86,22 @@ Ok:
         args:
           - attrs:
               pos:
-                line: 3
-                col: 14
+                line: 4
+                col: 18
             value:
               Access:
                 target:
                   attrs:
                     pos:
-                      line: 3
-                      col: 14
+                      line: 4
+                      col: 18
                   value:
                     Access:
                       target:
                         attrs:
                           pos:
-                            line: 2
-                            col: 10
+                            line: 4
+                            col: 18
                         value:
                           Id: e
                       field: data

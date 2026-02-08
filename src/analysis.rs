@@ -10,7 +10,7 @@ use unicase::Ascii;
 
 use crate::arena::ExprArena;
 use crate::{
-    App, Attrs, Binary, Expr, ExprRef, Field, FunArgs, Query, Raw, Source, SourceKind, Type, Value,
+    App, Attrs, Binary, ExprRef, Field, FunArgs, Query, Raw, Source, SourceKind, Type, Value,
     error::AnalysisError, token::Operator,
 };
 

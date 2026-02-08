@@ -1,6 +1,6 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.run_static_analysis(&Default::default())"
+expression: "query.and_then(|q|\n{\n    q.run_static_analysis(&arena, &Default::default()).map(|q| q.view(&arena))\n})"
 ---
 Ok:
   attrs:
@@ -26,7 +26,11 @@ Ok:
         col: 14
     value:
       Record:
-        - name: sum
+        - attrs:
+            pos:
+              line: 3
+              col: 2
+          name: sum
           value:
             attrs:
               pos:
@@ -58,7 +62,11 @@ Ok:
                                   Id: e
                               field: data
                         field: count
-        - name: label
+        - attrs:
+            pos:
+              line: 4
+              col: 2
+          name: label
           value:
             attrs:
               pos:
@@ -66,7 +74,11 @@ Ok:
                 col: 9
             value:
               String: everything summed
-        - name: randomvalue
+        - attrs:
+            pos:
+              line: 5
+              col: 2
+          name: randomvalue
           value:
             attrs:
               pos:

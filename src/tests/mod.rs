@@ -1,5 +1,5 @@
 use crate::arena::ExprArena;
-use crate::ast::{Binding, Expr, Limit, Order, Query};
+use crate::ast::{Binding, Limit, Order, Query};
 use crate::token::Operator;
 use crate::{Attrs, ExprRef, SourceKind, Value};
 use ordered_float::OrderedFloat;

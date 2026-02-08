@@ -10,8 +10,8 @@
 
 use crate::arena::ExprArena;
 use crate::ast::{
-    Access, App, Attrs, Binary, Expr, Field, Limit, Order, OrderBy, Query, Source, SourceKind,
-    Unary, Value,
+    Access, App, Attrs, Binary, Field, Limit, Order, OrderBy, Query, Source, SourceKind, Unary,
+    Value,
 };
 use crate::error::ParserError;
 use crate::token::{Operator, Sym, Symbol, Token};

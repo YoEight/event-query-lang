@@ -1,11 +1,11 @@
 use crate::{Attrs, Expr, ExprKey, ExprPtr, ExprRef, Value};
-use rustc_hash::{FxBuildHasher, FxHashMap};
+use rustc_hash::FxBuildHasher;
 use serde::Serialize;
 use std::hash::BuildHasher;
 
 #[derive(Debug, Serialize)]
 struct Slot {
-    spans: Vec<Attrs>,
+    attrs: Attrs,
     value: Value,
 }
 
@@ -13,7 +13,7 @@ struct Slot {
 pub struct ExprArena {
     #[serde(skip_serializing)]
     hasher: FxBuildHasher,
-    slots: FxHashMap<u64, Slot>,
+    slots: Vec<Slot>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -36,24 +36,16 @@ impl ExprArena {
     pub fn alloc(&mut self, attrs: Attrs, value: Value) -> ExprRef {
         let key = ExprKey(self.hasher.hash_one(&value));
 
-        let slot = self.slots.entry(key.0).or_insert_with(|| Slot {
-            spans: vec![],
-            value,
-        });
+        let ptr = ExprPtr(self.slots.len());
+        self.slots.push(Slot { attrs, value });
 
-        let ptr = ExprPtr(slot.spans.len());
-        slot.spans.push(attrs);
         ExprRef { key, ptr }
     }
 
     pub fn get(&self, node_ref: ExprRef) -> Node<'_> {
-        let slot = self
-            .slots
-            .get(&node_ref.key.0)
-            .expect("to be always defined");
-
+        let slot = &self.slots[node_ref.ptr.0];
         Node {
-            attrs: slot.spans[node_ref.ptr.0],
+            attrs: slot.attrs,
             value: &slot.value,
             node_ref,
         }

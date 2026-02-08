@@ -50,7 +50,11 @@ Ok:
         col: 14
     value:
       Record:
-        - name: department
+        - attrs:
+            pos:
+              line: 5
+              col: 2
+          name: department
           value:
             attrs:
               pos:
@@ -69,20 +73,24 @@ Ok:
                         target:
                           attrs:
                             pos:
-                              line: 3
-                              col: 10
+                              line: 5
+                              col: 21
                           value:
                             Access:
                               target:
                                 attrs:
                                   pos:
-                                    line: 3
-                                    col: 10
+                                    line: 5
+                                    col: 21
                                 value:
                                   Id: e
                               field: data
                         field: department
-        - name: cost
+        - attrs:
+            pos:
+              line: 6
+              col: 2
+          name: cost
           value:
             attrs:
               pos:
@@ -108,8 +116,8 @@ Ok:
                               target:
                                 attrs:
                                   pos:
-                                    line: 3
-                                    col: 10
+                                    line: 6
+                                    col: 12
                                 value:
                                   Id: e
                               field: data

@@ -73,7 +73,7 @@ Ok:
                                 attrs:
                                   pos:
                                     line: 2
-                                    col: 10
+                                    col: 39
                                 value:
                                   Id: e
                               field: data
@@ -95,7 +95,11 @@ Ok:
         col: 14
     value:
       Record:
-        - name: department
+        - attrs:
+            pos:
+              line: 4
+              col: 5
+          name: department
           value:
             attrs:
               pos:
@@ -114,20 +118,24 @@ Ok:
                         target:
                           attrs:
                             pos:
-                              line: 2
-                              col: 10
+                              line: 4
+                              col: 24
                           value:
                             Access:
                               target:
                                 attrs:
                                   pos:
-                                    line: 2
-                                    col: 10
+                                    line: 4
+                                    col: 24
                                 value:
                                   Id: e
                               field: data
                         field: department
-        - name: average
+        - attrs:
+            pos:
+              line: 5
+              col: 5
+          name: average
           value:
             attrs:
               pos:
@@ -139,22 +147,22 @@ Ok:
                 args:
                   - attrs:
                       pos:
-                        line: 2
-                        col: 39
+                        line: 5
+                        col: 18
                     value:
                       Access:
                         target:
                           attrs:
                             pos:
-                              line: 2
-                              col: 39
+                              line: 5
+                              col: 18
                           value:
                             Access:
                               target:
                                 attrs:
                                   pos:
-                                    line: 2
-                                    col: 10
+                                    line: 5
+                                    col: 18
                                 value:
                                   Id: e
                               field: data
