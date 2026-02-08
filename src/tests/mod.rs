@@ -1,7 +1,7 @@
 use crate::arena::ExprArena;
-use crate::ast::Expr;
+use crate::ast::{Binding, Expr, Limit, Order, Query};
 use crate::token::Operator;
-use crate::{Attrs, Value};
+use crate::{Attrs, SourceKind, Value};
 use ordered_float::OrderedFloat;
 use serde::Serialize;
 
@@ -67,6 +67,43 @@ pub struct UnaryView {
     pub expr: Box<ExprView>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct QueryView {
+    pub attrs: Attrs,
+    pub sources: Vec<SourceView>,
+    pub predicate: Option<ExprView>,
+    pub group_by: Option<GroupByView>,
+    pub order_by: Option<OrderByView>,
+    pub limit: Option<Limit>,
+    pub projection: ExprView,
+    pub distinct: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SourceView {
+    pub binding: Binding,
+    pub kind: SourceKindView,
+}
+
+#[derive(Debug, Serialize)]
+pub enum SourceKindView {
+    Name(String),
+    Subject(String),
+    Subquery(Box<QueryView>),
+}
+
+#[derive(Debug, Serialize)]
+pub struct GroupByView {
+    pub expr: ExprView,
+    pub predicate: Option<ExprView>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrderByView {
+    pub expr: ExprView,
+    pub order: Order,
+}
+
 impl Expr {
     pub fn view(&self, arena: &ExprArena) -> ExprView {
         let value = match arena.get(self.node_ref) {
@@ -105,5 +142,39 @@ impl Expr {
         };
 
         ExprView::new(self.attrs, value)
+    }
+}
+
+impl<A> Query<A> {
+    pub fn view(&self, arena: &ExprArena) -> QueryView {
+        QueryView {
+            attrs: self.attrs,
+            sources: self
+                .sources
+                .iter()
+                .map(|s| SourceView {
+                    binding: s.binding.clone(),
+                    kind: match &s.kind {
+                        SourceKind::Name(name) => SourceKindView::Name(name.clone()),
+                        SourceKind::Subject(subject) => SourceKindView::Subject(subject.clone()),
+                        SourceKind::Subquery(subquery) => {
+                            SourceKindView::Subquery(Box::new(subquery.view(arena)))
+                        }
+                    },
+                })
+                .collect(),
+            predicate: self.predicate.as_ref().map(|e| e.view(arena)),
+            group_by: self.group_by.as_ref().map(|g| GroupByView {
+                expr: g.expr.view(arena),
+                predicate: g.predicate.as_ref().map(|e| e.view(arena)),
+            }),
+            order_by: self.order_by.as_ref().map(|o| OrderByView {
+                expr: o.expr.view(arena),
+                order: o.order,
+            }),
+            limit: self.limit,
+            projection: self.projection.view(arena),
+            distinct: self.distinct,
+        }
     }
 }
