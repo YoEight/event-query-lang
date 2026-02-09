@@ -1229,11 +1229,9 @@ impl<'a> Analysis<'a> {
     ///
     /// ```rust
     /// use eventql_parser::Session;
-    /// use eventql_parser::prelude::{Type, AnalysisContext};
     ///
     /// let mut session = Session::builder().build();
     /// let query = session.parse("FROM e IN events PROJECT INTO { price: 1 + 2 }").unwrap();
-    /// let expr = query.projection;
     ///
     /// let result = session.run_static_analysis(query);
     /// assert!(result.is_ok());
