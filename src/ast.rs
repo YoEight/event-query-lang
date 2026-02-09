@@ -18,8 +18,8 @@ use crate::{
     token::{Operator, Token},
 };
 use ordered_float::OrderedFloat;
+use rustc_hash::FxHashMap;
 use serde::Serialize;
-use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::{
     fmt::{self, Display},
@@ -176,7 +176,7 @@ pub enum Type {
     /// Array type
     Array(Box<Type>),
     /// Record (object) type
-    Record(HashMap<String, Type>),
+    Record(FxHashMap<String, Type>),
     /// Subject pattern type
     Subject,
     /// Function type with support for optional parameters.
@@ -350,7 +350,7 @@ impl Display for Type {
 }
 
 impl Type {
-    pub fn as_record_or_panic_mut(&mut self) -> &mut HashMap<String, Type> {
+    pub fn as_record_or_panic_mut(&mut self) -> &mut FxHashMap<String, Type> {
         if let Self::Record(r) = self {
             return r;
         }

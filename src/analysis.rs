@@ -1,6 +1,6 @@
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
+use rustc_hash::FxHashMap;
 use serde::{Serialize, ser::SerializeMap};
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::{borrow::Cow, collections::HashSet, mem};
 use unicase::Ascii;
@@ -428,7 +428,7 @@ impl Default for AnalysisOptions {
                     ),
                 ]),
             },
-            event_type_info: Type::Record(HashMap::from([
+            event_type_info: Type::Record(FxHashMap::from_iter([
                 ("specversion".to_owned(), Type::String),
                 ("id".to_owned(), Type::String),
                 ("time".to_owned(), Type::DateTime),
@@ -1290,7 +1290,7 @@ impl<'a> Analysis<'a> {
 
             Value::Record(fields) => {
                 if matches!(expect, Type::Unspecified) {
-                    let mut record = HashMap::new();
+                    let mut record = FxHashMap::default();
 
                     for field in fields {
                         record.insert(
@@ -1550,7 +1550,7 @@ impl<'a> Analysis<'a> {
                     match state.definition {
                         Def::User(tpe) => {
                             if matches!(tpe, Type::Unspecified) && state.dynamic {
-                                *tpe = Type::Record(HashMap::from([(
+                                *tpe = Type::Record(FxHashMap::from_iter([(
                                     access.field.clone(),
                                     Type::Unspecified,
                                 )]));
