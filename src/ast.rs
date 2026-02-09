@@ -11,10 +11,8 @@
 //! - [`Value`] - The various kinds of expression values (literals, operators, etc.)
 //! - [`Source`] - Data sources in FROM clauses
 //!
-use crate::arena::ExprArena;
 use crate::{
-    analysis::{AnalysisOptions, Typed, static_analysis},
-    error::{AnalysisError, Error},
+    error::AnalysisError,
     token::{Operator, Token},
 };
 use ordered_float::OrderedFloat;
@@ -234,13 +232,13 @@ pub enum Type {
     /// # Examples
     ///
     /// ```
-    /// use eventql_parser::{parse_query, prelude::AnalysisOptions};
-    /// use eventql_parser::arena::ExprArena;
+    /// use eventql_parser::Session;
     ///
-    /// let mut arena = ExprArena::default();
-    /// let query = parse_query(&mut arena, "FROM e IN events PROJECT INTO { ts: e.data.timestamp as CustomTimestamp }").unwrap();
-    /// let options = AnalysisOptions::default().add_custom_type("CustomTimestamp");
-    /// let typed_query = query.run_static_analysis(&arena, &options).unwrap();
+    /// let mut session = Session::builder()
+    ///     .declare_custom_type("CustomTimestamp")
+    ///     .build();
+    /// let query = session.parse("FROM e IN events PROJECT INTO { ts: e.data.timestamp as CustomTimestamp }").unwrap();
+    /// let typed_query = session.run_static_analysis(query).unwrap();
     /// ```
     Custom(String),
 }
@@ -778,12 +776,10 @@ pub struct Raw;
 /// # Examples
 ///
 /// ```
-/// use eventql_parser::parse_query;
-/// use eventql_parser::arena::ExprArena;
+/// use eventql_parser::Session;
 ///
-/// let mut arena = ExprArena::default();
-/// let query = parse_query(
-///     &mut arena,
+/// let mut session = Session::builder().use_stdlib().build();
+/// let query = session.parse(
 ///     "FROM e IN events \
 ///      WHERE e.price > 100 \
 ///      ORDER BY e.timestamp DESC \
@@ -824,37 +820,4 @@ pub struct Query<A> {
     ///
     /// This provides compile-time guarantees about the query's type safety.
     pub meta: A,
-}
-
-impl Query<Raw> {
-    /// Performs static analysis on this raw query.
-    ///
-    /// This is a convenience method that runs type checking and variable scoping
-    /// analysis on the query, converting it from a raw (untyped) query to a
-    /// typed query.
-    ///
-    /// The analysis validates:
-    /// - Variable declarations and scoping
-    /// - Type compatibility in expressions and operations
-    /// - Valid field accesses on record types
-    /// - Correct function argument types and counts
-    /// - Aggregate function usage restrictions (only in PROJECT INTO)
-    /// - No mixing of aggregate functions with source-bound fields
-    /// - Aggregate function arguments are source-bound fields
-    /// - Non-empty record literals in projections
-    ///
-    /// # Arguments
-    ///
-    /// * `options` - Configuration containing type information and default scope
-    ///
-    /// # Returns
-    ///
-    /// Returns a typed query on success, or an error if type checking fails.
-    pub fn run_static_analysis(
-        self,
-        arena: &ExprArena,
-        options: &AnalysisOptions,
-    ) -> crate::Result<Query<Typed>> {
-        static_analysis(arena, options, self).map_err(Error::Analysis)
-    }
 }

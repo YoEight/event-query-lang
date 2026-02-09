@@ -1,16 +1,19 @@
-use crate::lexer::tokenize;
+use crate::Session;
 
 #[test]
 fn test_lexer_all_kind() {
-    insta::assert_yaml_snapshot!(tokenize("foo != 123(]{.:"));
+    let session = Session::builder().build();
+    insta::assert_yaml_snapshot!(session.tokenize("foo != 123(]{.:"));
 }
 
 #[test]
 fn test_lexer_negative_number() {
-    insta::assert_yaml_snapshot!(tokenize("-123.456"));
+    let session = Session::builder().build();
+    insta::assert_yaml_snapshot!(session.tokenize("-123.456"));
 }
 
 #[test]
 fn test_lexer_comment() {
-    insta::assert_yaml_snapshot!(tokenize("// useless comment\n "));
+    let session = Session::builder().build();
+    insta::assert_yaml_snapshot!(session.tokenize("// useless comment\n "));
 }

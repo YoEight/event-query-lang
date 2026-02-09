@@ -38,12 +38,10 @@ impl<'a> Parser<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use eventql_parser::prelude::{tokenize, Parser};
-    /// use eventql_parser::arena::ExprArena;
+    /// use eventql_parser::Session;
     ///
-    /// let mut arena = ExprArena::default();
-    /// let tokens = tokenize("1 + 2").unwrap();
-    /// let parser = Parser::new(&mut arena, tokens.as_slice());
+    /// let session = Session::builder().build();
+    /// let tokens = session.tokenize("1 + 2").unwrap();
     /// ```
     pub fn new(arena: &'a mut ExprArena, input: &'a [Token<'a>]) -> Self {
         Self {
@@ -214,12 +212,10 @@ impl<'a> Parser<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use eventql_parser::prelude::{tokenize, Parser};
-    /// use eventql_parser::arena::ExprArena;
+    /// use eventql_parser::Session;
     ///
-    /// let mut arena = ExprArena::default();
-    /// let tokens = tokenize("NOW()").unwrap();
-    /// let expr = Parser::new(&mut arena, tokens.as_slice()).parse_expr().unwrap();
+    /// let session = Session::builder().build();
+    /// let tokens = session.tokenize("NOW()").unwrap();
     /// ```
     pub fn parse_expr(&mut self) -> ParseResult<ExprRef> {
         let token = self.peek();
@@ -567,7 +563,10 @@ fn binding_pow(op: Operator) -> (u64, u64) {
 /// 3. Additive (`+`, `-`)
 /// 4. Comparison (`<`, `<=`, `>`, `>=`, `==`, `!=`)
 /// 5. Logical (`AND`, `OR`, `XOR`)
-pub fn parse<'a>(arena: &'a mut ExprArena, input: &'a [Token<'a>]) -> ParseResult<Query<Raw>> {
+pub(crate) fn parse<'a>(
+    arena: &'a mut ExprArena,
+    input: &'a [Token<'a>],
+) -> ParseResult<Query<Raw>> {
     let mut parser = Parser::new(arena, input);
 
     parser.parse_query()

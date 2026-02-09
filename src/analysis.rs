@@ -104,6 +104,14 @@ impl AnalysisOptions {
 
         self
     }
+
+    pub fn empty() -> Self {
+        Self {
+            default_scope: Scope::default(),
+            event_type_info: Type::default(),
+            custom_types: HashSet::default(),
+        }
+    }
 }
 
 impl Default for AnalysisOptions {
@@ -469,7 +477,7 @@ impl Default for AnalysisOptions {
 /// # Returns
 ///
 /// Returns a typed query on success, or an `AnalysisError` if type checking fails.
-pub fn static_analysis(
+pub(crate) fn static_analysis(
     arena: &ExprArena,
     options: &AnalysisOptions,
     query: Query<Raw>,
@@ -617,16 +625,12 @@ impl<'a> Analysis<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use eventql_parser::{parse_query, prelude::{Analysis, AnalysisOptions}};
-    /// use eventql_parser::arena::ExprArena;
+    /// use eventql_parser::Session;
     ///
-    /// let mut arena = ExprArena::default();
-    /// let query = parse_query(&mut arena, "FROM e IN events WHERE [1,2,3] CONTAINS e.data.price PROJECT INTO e").unwrap();
+    /// let mut session = Session::builder().build();
+    /// let query = session.parse("FROM e IN events WHERE [1,2,3] CONTAINS e.data.price PROJECT INTO e").unwrap();
     ///
-    /// let options = AnalysisOptions::default();
-    /// let mut analysis = Analysis::new(&arena, &options);
-    ///
-    /// let typed_query = analysis.analyze_query(query);
+    /// let typed_query = session.run_static_analysis(query);
     /// assert!(typed_query.is_ok());
     /// ```
     pub fn analyze_query(&mut self, query: Query<Raw>) -> AnalysisResult<Query<Typed>> {
@@ -1224,16 +1228,12 @@ impl<'a> Analysis<'a> {
     /// # Example
     ///
     /// ```rust
-    /// use eventql_parser::prelude::{tokenize, Parser, Analysis, AnalysisContext, AnalysisOptions, Type};
-    /// use eventql_parser::arena::ExprArena;
+    /// use eventql_parser::Session;
     ///
-    /// let mut arena = ExprArena::default();
-    /// let tokens = tokenize("1 + 2").unwrap();
-    /// let expr = Parser::new(&mut arena, tokens.as_slice()).parse_expr().unwrap();
-    /// let options = AnalysisOptions::default();
-    /// let mut analysis = Analysis::new(&arena, &options);
+    /// let mut session = Session::builder().build();
+    /// let query = session.parse("FROM e IN events PROJECT INTO { price: 1 + 2 }").unwrap();
     ///
-    /// let result = analysis.analyze_expr(&mut AnalysisContext::default(), expr, Type::Number);
+    /// let result = session.run_static_analysis(query);
     /// assert!(result.is_ok());
     /// ```
     pub fn analyze_expr(

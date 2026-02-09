@@ -14,8 +14,12 @@ mod tests;
 mod token;
 
 use crate::arena::ExprArena;
-use crate::prelude::{parse, tokenize};
+use crate::lexer::tokenize;
+use crate::prelude::{AnalysisOptions, Typed, parse, static_analysis};
+use crate::token::Token;
 pub use ast::*;
+use rustc_hash::FxHashMap;
+use unicase::Ascii;
 
 /// Convenience module that re-exports all public types and functions.
 ///
@@ -25,48 +29,365 @@ pub mod prelude {
     pub use super::analysis::*;
     pub use super::ast::*;
     pub use super::error::*;
-    pub use super::lexer::*;
     pub use super::parser::*;
     pub use super::token::*;
 }
 
 pub type Result<A> = std::result::Result<A, error::Error>;
 
-/// Parse an EventQL query string into an abstract syntax tree.
+/// `SessionBuilder` is a builder for `Session` objects.
 ///
-/// This is the main entry point for parsing EventQL queries. It performs both
-/// lexical analysis (tokenization) and syntactic analysis (parsing) in a single call.
-/// # Examples
+/// It allows for the configuration of analysis options, such as declaring
+/// functions (both regular and aggregate), event types, and custom types,
+/// before building an `EventQL` parsing session.
+pub struct SessionBuilder {
+    options: AnalysisOptions,
+}
+
+impl SessionBuilder {
+    /// Declares a new function with the given name, arguments, and return type.
+    ///
+    /// This function adds a new entry to the session's default scope, allowing
+    /// the parser to recognize and type-check calls to this function.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the function.
+    /// * `args` - The arguments the function accepts, which can be converted into `FunArgs`.
+    /// * `result` - The return type of the function.
+    pub fn declare_func(self, name: &str, args: impl Into<FunArgs>, result: Type) -> Self {
+        self.declare_func_when(true, name, args, result)
+    }
+
+    /// Conditionally declares a new function with the given name, arguments, and return type.
+    ///
+    /// This function behaves like `declare_func` but only declares the function
+    /// if the `test` argument is `true`. This is useful for conditionally
+    /// including functions based on configuration or features.
+    ///
+    /// # Arguments
+    ///
+    /// * `test` - A boolean indicating whether to declare the function.
+    /// * `name` - The name of the function.
+    /// * `args` - The arguments the function accepts, which can be converted into `FunArgs`.
+    /// * `result` - The return type of the function.
+    pub fn declare_func_when(
+        mut self,
+        test: bool,
+        name: &str,
+        args: impl Into<FunArgs>,
+        result: Type,
+    ) -> Self {
+        if test {
+            self.options.default_scope.entries.insert(
+                name,
+                Type::App {
+                    args: args.into(),
+                    result: Box::new(result),
+                    aggregate: false,
+                },
+            );
+        }
+
+        self
+    }
+
+    /// Declares a new aggregate function with the given name, arguments, and return type.
+    ///
+    /// Similar to `declare_func`, but marks the function as an aggregate function.
+    /// Aggregate functions have specific rules for where they can be used in an EQL query.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the aggregate function.
+    /// * `args` - The arguments the aggregate function accepts.
+    /// * `result` - The return type of the aggregate function.
+    pub fn declare_agg_func(self, name: &str, args: impl Into<FunArgs>, result: Type) -> Self {
+        self.declare_agg_func_when(true, name, args, result)
+    }
+
+    /// Conditionally declares a new aggregate function.
+    ///
+    /// Behaves like `declare_agg_func` but only declares the function
+    /// if the `test` argument is `true`.
+    ///
+    /// # Arguments
+    ///
+    /// * `test` - A boolean indicating whether to declare the aggregate function.
+    /// * `name` - The name of the aggregate function.
+    /// * `args` - The arguments the aggregate function accepts.
+    /// * `result` - The return type of the aggregate function.
+    pub fn declare_agg_func_when(
+        mut self,
+        test: bool,
+        name: &str,
+        args: impl Into<FunArgs>,
+        result: Type,
+    ) -> Self {
+        if test {
+            self.options.default_scope.entries.insert(
+                name,
+                Type::App {
+                    args: args.into(),
+                    result: Box::new(result),
+                    aggregate: true,
+                },
+            );
+        }
+
+        self
+    }
+
+    /// Conditionally declares the expected type of event records.
+    ///
+    /// This type information is crucial for type-checking event properties
+    /// accessed in EQL queries (e.g., `e.id`, `e.data.value`).
+    /// The declaration only happens if `test` is `true`.
+    ///
+    /// # Arguments
+    ///
+    /// * `test` - A boolean indicating whether to declare the event type.
+    /// * `tpe` - The `Type` representing the structure of event records.
+    pub fn declare_event_type_when(mut self, test: bool, tpe: Type) -> Self {
+        if test {
+            self.options.event_type_info = tpe;
+        }
+
+        self
+    }
+
+    /// Declares the expected type of event records.
+    ///
+    /// This type information is crucial for type-checking event properties
+    /// accessed in EQL queries (e.g., `e.id`, `e.data.value`).
+    ///
+    /// # Arguments
+    ///
+    /// * `tpe` - The `Type` representing the structure of event records.
+    pub fn declare_event_type(mut self, tpe: Type) -> Self {
+        self.options.event_type_info = tpe;
+        self
+    }
+
+    /// Conditionally declares a custom type that can be used in EQL queries.
+    ///
+    /// This allows the type-checker to recognize and validate custom types
+    /// that might be used in type conversions or record definitions.
+    /// The declaration only happens if `test` is `true`.
+    ///
+    /// # Arguments
+    ///
+    /// * `test` - A boolean indicating whether to declare the custom type.
+    /// * `name` - The name of the custom type.
+    pub fn declare_custom_type_when(mut self, test: bool, name: &str) -> Self {
+        if test {
+            self.options
+                .custom_types
+                .insert(Ascii::new(name.to_owned()));
+        }
+
+        self
+    }
+
+    /// Declares a custom type that can be used in EQL queries.
+    ///
+    /// This allows the type-checker to recognize and validate custom types
+    /// that might be used in type conversions or record definitions.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the custom type.
+    pub fn declare_custom_type(mut self, name: &str) -> Self {
+        self.options
+            .custom_types
+            .insert(Ascii::new(name.to_owned()));
+        self
+    }
+
+    /// Includes the standard library of functions and event types in the session.
+    ///
+    /// This method pre-configures the `SessionBuilder` with a set of commonly
+    /// used functions (e.g., mathematical, string, date/time) and a default
+    /// event type definition. Calling this method is equivalent to calling
+    /// `declare_func` and `declare_agg_func` for all standard library functions,
+    /// and `declare_event_type` for the default event structure.
+    pub fn use_stdlib(self) -> Self {
+        self.declare_func("ABS", vec![Type::Number], Type::Number)
+            .declare_func("CEIL", vec![Type::Number], Type::Number)
+            .declare_func("FLOOR", vec![Type::Number], Type::Number)
+            .declare_func("ROUND", vec![Type::Number], Type::Number)
+            .declare_func("COS", vec![Type::Number], Type::Number)
+            .declare_func("EXP", vec![Type::Number], Type::Number)
+            .declare_func("POW", vec![Type::Number, Type::Number], Type::Number)
+            .declare_func("SQRT", vec![Type::Number], Type::Number)
+            .declare_func("RAND", vec![], Type::Number)
+            .declare_func("PI", vec![Type::Number], Type::Number)
+            .declare_func("LOWER", vec![Type::String], Type::String)
+            .declare_func("UPPER", vec![Type::String], Type::String)
+            .declare_func("TRIM", vec![Type::String], Type::String)
+            .declare_func("LTRIM", vec![Type::String], Type::String)
+            .declare_func("RTRIM", vec![Type::String], Type::String)
+            .declare_func("LEN", vec![Type::String], Type::Number)
+            .declare_func("INSTR", vec![Type::String], Type::Number)
+            .declare_func(
+                "SUBSTRING",
+                vec![Type::String, Type::Number, Type::Number],
+                Type::String,
+            )
+            .declare_func(
+                "REPLACE",
+                vec![Type::String, Type::String, Type::String],
+                Type::String,
+            )
+            .declare_func("STARTSWITH", vec![Type::String, Type::String], Type::Bool)
+            .declare_func("ENDSWITH", vec![Type::String, Type::String], Type::Bool)
+            .declare_func("NOW", vec![], Type::DateTime)
+            .declare_func("YEAR", vec![Type::Date], Type::Number)
+            .declare_func("MONTH", vec![Type::Date], Type::Number)
+            .declare_func("DAY", vec![Type::Date], Type::Number)
+            .declare_func("HOUR", vec![Type::Time], Type::Number)
+            .declare_func("MINUTE", vec![Type::Time], Type::Number)
+            .declare_func("SECOND", vec![Type::Time], Type::Number)
+            .declare_func("WEEKDAY", vec![Type::Date], Type::Number)
+            .declare_func(
+                "IF",
+                vec![Type::Bool, Type::Unspecified, Type::Unspecified],
+                Type::Unspecified,
+            )
+            .declare_agg_func(
+                "COUNT",
+                FunArgs {
+                    values: vec![Type::Bool],
+                    needed: 0,
+                },
+                Type::Number,
+            )
+            .declare_agg_func("SUM", vec![Type::Number], Type::Number)
+            .declare_agg_func("AVG", vec![Type::Number], Type::Number)
+            .declare_agg_func("MIN", vec![Type::Number], Type::Number)
+            .declare_agg_func("MAX", vec![Type::Number], Type::Number)
+            .declare_agg_func("MEDIAN", vec![Type::Number], Type::Number)
+            .declare_agg_func("STDDEV", vec![Type::Number], Type::Number)
+            .declare_agg_func("VARIANCE", vec![Type::Number], Type::Number)
+            .declare_agg_func("UNIQUE", vec![Type::Unspecified], Type::Unspecified)
+            .declare_event_type(Type::Record(FxHashMap::from_iter([
+                ("specversion".to_owned(), Type::String),
+                ("id".to_owned(), Type::String),
+                ("time".to_owned(), Type::DateTime),
+                ("source".to_owned(), Type::String),
+                ("subject".to_owned(), Type::Subject),
+                ("type".to_owned(), Type::String),
+                ("datacontenttype".to_owned(), Type::String),
+                ("data".to_owned(), Type::Unspecified),
+                ("predecessorhash".to_owned(), Type::String),
+                ("hash".to_owned(), Type::String),
+                ("traceparent".to_owned(), Type::String),
+                ("tracestate".to_owned(), Type::String),
+                ("signature".to_owned(), Type::String),
+            ])))
+    }
+
+    /// Builds the `Session` object with the configured analysis options.
+    ///
+    /// This consumes the `SessionBuilder` and returns a `Session` instance
+    /// ready for tokenizing, parsing, and analyzing EventQL queries.
+    pub fn build(self) -> Session {
+        Session {
+            arena: ExprArena::default(),
+            options: self.options,
+        }
+    }
+}
+
+impl Default for SessionBuilder {
+    fn default() -> Self {
+        Self {
+            options: AnalysisOptions::empty(),
+        }
+    }
+}
+
+/// `Session` is the main entry point for parsing and analyzing EventQL queries.
 ///
-/// ```
-/// use eventql_parser::parse_query;
-/// use eventql_parser::arena::ExprArena;
-///
-/// let mut arena = ExprArena::default();
-///
-/// // Parse a simple query
-/// let query = parse_query(&mut arena, "FROM e IN events WHERE e.id == 1 PROJECT INTO e").unwrap();
-/// assert!(query.predicate.is_some());
-///
-/// // Parse with multiple clauses
-/// let complex = parse_query(
-///     &mut arena,
-///     "FROM e IN events \
-///      WHERE e.price > 100 \
-///      ORDER BY e.timestamp DESC \
-///      TOP 10 \
-///      PROJECT INTO {id: e.id, price: e.price}"
-/// ).unwrap();
-/// assert!(complex.order_by.is_some());
-/// assert!(complex.limit.is_some());
-///
-/// // Handle errors
-/// match parse_query(&mut arena, "FROM e IN events WHERE") {
-///     Ok(_) => println!("Parsed successfully"),
-///     Err(e) => println!("Parse error: {}", e),
-/// }
-/// ```
-pub fn parse_query(arena: &mut ExprArena, input: &str) -> Result<Query<Raw>> {
-    let tokens = tokenize(input)?;
-    Ok(parse(arena, tokens.as_slice())?)
+/// It holds the necessary context, such as the expression arena and analysis options,
+/// to perform lexical analysis, parsing, and static analysis of EQL query strings.
+pub struct Session {
+    arena: ExprArena,
+    options: AnalysisOptions,
+}
+
+impl Session {
+    /// Creates a new `SessionBuilder` for configuring and building a `Session`.
+    ///
+    /// This is the recommended way to create a `Session` instance, allowing
+    /// for customization of functions, event types, and custom types.
+    ///
+    /// # Returns
+    ///
+    /// A new `SessionBuilder` instance.
+    pub fn builder() -> SessionBuilder {
+        SessionBuilder::default()
+    }
+
+    /// Tokenize an EventQL query string.
+    ///
+    /// This function performs lexical analysis on the input string, converting it
+    /// into a sequence of tokens. Each token includes position information (line
+    /// and column numbers) for error reporting.
+    /// # Recognized Tokens
+    ///
+    /// - **Identifiers**: Alphanumeric names starting with a letter (e.g., `events`, `e`)
+    /// - **Keywords**: Case-insensitive SQL-like keywords detected by the parser
+    /// - **Numbers**: Floating-point literals (e.g., `42`, `3.14`)
+    /// - **Strings**: Double-quoted string literals (e.g., `"hello"`)
+    /// - **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `<`, `<=`, `>`, `>=`), logical (`AND`, `OR`, `XOR`, `NOT`)
+    /// - **Symbols**: Structural characters (`(`, `)`, `[`, `]`, `{`, `}`, `.`, `,`, `:`)
+    pub fn tokenize<'a>(&self, input: &'a str) -> Result<Vec<Token<'a>>> {
+        let tokens = tokenize(input)?;
+        Ok(tokens)
+    }
+
+    /// Parse an EventQL query string into an abstract syntax tree.
+    ///
+    /// This is the main entry point for parsing EventQL queries. It performs both
+    /// lexical analysis (tokenization) and syntactic analysis (parsing) in a single call.
+    /// # Examples
+    ///
+    /// ```
+    /// use eventql_parser::Session;
+    ///
+    /// // Parse a simple query
+    /// let mut session = Session::builder().use_stdlib().build();
+    /// let query = session.parse("FROM e IN events WHERE e.id == \"1\" PROJECT INTO e").unwrap();
+    /// assert!(query.predicate.is_some());
+    /// ```
+    pub fn parse(&mut self, input: &str) -> Result<Query<Raw>> {
+        let tokens = self.tokenize(input)?;
+        Ok(parse(&mut self.arena, tokens.as_slice())?)
+    }
+
+    /// Performs static analysis on an EventQL query.
+    ///
+    /// This function takes a raw (untyped) query and performs type checking and
+    /// variable scoping analysis. It validates that:
+    /// - All variables are properly declared
+    /// - Types match expected types in expressions and operations
+    /// - Field accesses are valid for their record types
+    /// - Function calls have the correct argument types
+    /// - Aggregate functions are only used in PROJECT INTO clauses
+    /// - Aggregate functions are not mixed with source-bound fields in projections
+    /// - Aggregate function arguments are source-bound fields (not constants or function results)
+    /// - Record literals are non-empty in projection contexts
+    ///
+    /// # Arguments
+    ///
+    /// * `options` - Configuration containing type information and default scope
+    /// * `query` - The raw query to analyze
+    ///
+    /// # Returns
+    ///
+    /// Returns a typed query on success, or an `AnalysisError` if type checking fails.
+    pub fn run_static_analysis(&self, query: Query<Raw>) -> Result<Query<Typed>> {
+        Ok(static_analysis(&self.arena, &self.options, query)?)
+    }
 }
