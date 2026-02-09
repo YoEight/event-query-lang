@@ -823,36 +823,3 @@ pub struct Query<A> {
     /// This provides compile-time guarantees about the query's type safety.
     pub meta: A,
 }
-
-impl Query<Raw> {
-    /// Performs static analysis on this raw query.
-    ///
-    /// This is a convenience method that runs type checking and variable scoping
-    /// analysis on the query, converting it from a raw (untyped) query to a
-    /// typed query.
-    ///
-    /// The analysis validates:
-    /// - Variable declarations and scoping
-    /// - Type compatibility in expressions and operations
-    /// - Valid field accesses on record types
-    /// - Correct function argument types and counts
-    /// - Aggregate function usage restrictions (only in PROJECT INTO)
-    /// - No mixing of aggregate functions with source-bound fields
-    /// - Aggregate function arguments are source-bound fields
-    /// - Non-empty record literals in projections
-    ///
-    /// # Arguments
-    ///
-    /// * `options` - Configuration containing type information and default scope
-    ///
-    /// # Returns
-    ///
-    /// Returns a typed query on success, or an error if type checking fails.
-    pub fn run_static_analysis(
-        self,
-        arena: &ExprArena,
-        options: &AnalysisOptions,
-    ) -> crate::Result<Query<Typed>> {
-        static_analysis(arena, options, self).map_err(Error::Analysis)
-    }
-}

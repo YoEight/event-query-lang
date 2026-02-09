@@ -222,6 +222,19 @@ impl Session {
         SessionBuilder::default()
     }
 
+    /// Tokenize an EventQL query string.
+    ///
+    /// This function performs lexical analysis on the input string, converting it
+    /// into a sequence of tokens. Each token includes position information (line
+    /// and column numbers) for error reporting.
+    /// # Recognized Tokens
+    ///
+    /// - **Identifiers**: Alphanumeric names starting with a letter (e.g., `events`, `e`)
+    /// - **Keywords**: Case-insensitive SQL-like keywords detected by the parser
+    /// - **Numbers**: Floating-point literals (e.g., `42`, `3.14`)
+    /// - **Strings**: Double-quoted string literals (e.g., `"hello"`)
+    /// - **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `<`, `<=`, `>`, `>=`), logical (`AND`, `OR`, `XOR`, `NOT`)
+    /// - **Symbols**: Structural characters (`(`, `)`, `[`, `]`, `{`, `}`, `.`, `,`, `:`)
     pub fn tokenize<'a>(&self, input: &'a str) -> Result<Vec<Token<'a>>> {
         let tokens = tokenize(input)?;
         Ok(tokens)
@@ -246,6 +259,27 @@ impl Session {
         Ok(parse(&mut self.arena, tokens.as_slice())?)
     }
 
+    /// Performs static analysis on an EventQL query.
+    ///
+    /// This function takes a raw (untyped) query and performs type checking and
+    /// variable scoping analysis. It validates that:
+    /// - All variables are properly declared
+    /// - Types match expected types in expressions and operations
+    /// - Field accesses are valid for their record types
+    /// - Function calls have the correct argument types
+    /// - Aggregate functions are only used in PROJECT INTO clauses
+    /// - Aggregate functions are not mixed with source-bound fields in projections
+    /// - Aggregate function arguments are source-bound fields (not constants or function results)
+    /// - Record literals are non-empty in projection contexts
+    ///
+    /// # Arguments
+    ///
+    /// * `options` - Configuration containing type information and default scope
+    /// * `query` - The raw query to analyze
+    ///
+    /// # Returns
+    ///
+    /// Returns a typed query on success, or an `AnalysisError` if type checking fails.
     pub fn run_static_analysis(&self, query: Query<Raw>) -> Result<Query<Typed>> {
         Ok(static_analysis(&self.arena, &self.options, query)?)
     }
