@@ -4,7 +4,7 @@
 //! designed for event sourcing systems. It allows you to parse EQL query strings into
 //! an abstract syntax tree (AST) that can be analyzed or executed.
 mod analysis;
-mod arena;
+pub mod arena;
 mod ast;
 mod error;
 mod lexer;
@@ -40,13 +40,17 @@ pub type Result<A> = std::result::Result<A, error::Error>;
 ///
 /// ```
 /// use eventql_parser::parse_query;
+/// use eventql_parser::arena::ExprArena;
+///
+/// let mut arena = ExprArena::default();
 ///
 /// // Parse a simple query
-/// let query = parse_query("FROM e IN events WHERE e.id == 1 PROJECT INTO e").unwrap();
+/// let query = parse_query(&mut arena, "FROM e IN events WHERE e.id == 1 PROJECT INTO e").unwrap();
 /// assert!(query.predicate.is_some());
 ///
 /// // Parse with multiple clauses
 /// let complex = parse_query(
+///     &mut arena,
 ///     "FROM e IN events \
 ///      WHERE e.price > 100 \
 ///      ORDER BY e.timestamp DESC \
@@ -57,7 +61,7 @@ pub type Result<A> = std::result::Result<A, error::Error>;
 /// assert!(complex.limit.is_some());
 ///
 /// // Handle errors
-/// match parse_query("FROM e IN events WHERE") {
+/// match parse_query(&mut arena, "FROM e IN events WHERE") {
 ///     Ok(_) => println!("Parsed successfully"),
 ///     Err(e) => println!("Parse error: {}", e),
 /// }

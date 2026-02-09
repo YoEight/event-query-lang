@@ -618,11 +618,13 @@ impl<'a> Analysis<'a> {
     ///
     /// ```rust
     /// use eventql_parser::{parse_query, prelude::{Analysis, AnalysisOptions}};
+    /// use eventql_parser::arena::ExprArena;
     ///
-    /// let query = parse_query("FROM e IN events WHERE [1,2,3] CONTAINS e.data.price PROJECT INTO e").unwrap();
+    /// let mut arena = ExprArena::default();
+    /// let query = parse_query(&mut arena, "FROM e IN events WHERE [1,2,3] CONTAINS e.data.price PROJECT INTO e").unwrap();
     ///
     /// let options = AnalysisOptions::default();
-    /// let mut analysis = Analysis::new(&options);
+    /// let mut analysis = Analysis::new(&arena, &options);
     ///
     /// let typed_query = analysis.analyze_query(query);
     /// assert!(typed_query.is_ok());
@@ -1223,13 +1225,15 @@ impl<'a> Analysis<'a> {
     ///
     /// ```rust
     /// use eventql_parser::prelude::{tokenize, Parser, Analysis, AnalysisContext, AnalysisOptions, Type};
+    /// use eventql_parser::arena::ExprArena;
     ///
+    /// let mut arena = ExprArena::default();
     /// let tokens = tokenize("1 + 2").unwrap();
-    /// let expr = Parser::new(tokens.as_slice()).parse_expr().unwrap();
+    /// let expr = Parser::new(&mut arena, tokens.as_slice()).parse_expr().unwrap();
     /// let options = AnalysisOptions::default();
-    /// let mut analysis = Analysis::new(&options);
+    /// let mut analysis = Analysis::new(&arena, &options);
     ///
-    /// let result = analysis.analyze_expr(&mut AnalysisContext::default(), &expr, Type::Number);
+    /// let result = analysis.analyze_expr(&mut AnalysisContext::default(), expr, Type::Number);
     /// assert!(result.is_ok());
     /// ```
     pub fn analyze_expr(

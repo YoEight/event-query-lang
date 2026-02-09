@@ -235,10 +235,12 @@ pub enum Type {
     ///
     /// ```
     /// use eventql_parser::{parse_query, prelude::AnalysisOptions};
+    /// use eventql_parser::arena::ExprArena;
     ///
-    /// let query = parse_query("FROM e IN events PROJECT INTO { ts: e.data.timestamp as CustomTimestamp }").unwrap();
+    /// let mut arena = ExprArena::default();
+    /// let query = parse_query(&mut arena, "FROM e IN events PROJECT INTO { ts: e.data.timestamp as CustomTimestamp }").unwrap();
     /// let options = AnalysisOptions::default().add_custom_type("CustomTimestamp");
-    /// let typed_query = query.run_static_analysis(&options).unwrap();
+    /// let typed_query = query.run_static_analysis(&arena, &options).unwrap();
     /// ```
     Custom(String),
 }
@@ -777,8 +779,11 @@ pub struct Raw;
 ///
 /// ```
 /// use eventql_parser::parse_query;
+/// use eventql_parser::arena::ExprArena;
 ///
+/// let mut arena = ExprArena::default();
 /// let query = parse_query(
+///     &mut arena,
 ///     "FROM e IN events \
 ///      WHERE e.price > 100 \
 ///      ORDER BY e.timestamp DESC \
