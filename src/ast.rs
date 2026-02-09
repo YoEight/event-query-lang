@@ -489,12 +489,18 @@ impl<'a> From<Token<'a>> for Attrs {
     }
 }
 
+/// Internal pointer to an expression in the arena.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct ExprPtr(pub(crate) usize);
 
+/// Internal hash key for an expression to provide structural equality.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct ExprKey(pub(crate) u64);
 
+/// A reference to an expression stored in an [`ExprArena`].
+///
+/// This is a lightweight handle that combines a hash key for fast comparison
+/// and a pointer for fast lookup.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct ExprRef {
     pub(crate) key: ExprKey,

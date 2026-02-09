@@ -9,6 +9,10 @@ struct Slot {
     value: Value,
 }
 
+/// An arena-based allocator for EventQL expressions.
+///
+/// The `ExprArena` provides a memory-efficient way to store and manage AST nodes
+/// by using a flat vector and returning lightweight [`ExprRef`] handles.
 #[derive(Default, Serialize)]
 pub struct ExprArena {
     #[serde(skip_serializing)]
@@ -16,10 +20,17 @@ pub struct ExprArena {
     slots: Vec<Slot>,
 }
 
+/// A view into a single node within an [`ExprArena`].
+///
+/// This struct provides access to the attributes and value of a node
+/// without transferring ownership. It's typically obtained by calling [`ExprArena::get`].
 #[derive(Debug, Copy, Clone)]
 pub struct Node<'a> {
+    /// Metadata about this expression (e.g., source position)
     pub attrs: Attrs,
+    /// The actual kind and value of the expression
     pub value: &'a Value,
+    /// The stable reference to this node in the arena
     pub node_ref: ExprRef,
 }
 
@@ -33,6 +44,11 @@ impl<'a> Node<'a> {
 }
 
 impl ExprArena {
+    /// Allocates a new expression in the arena.
+    ///
+    /// This method takes an expression's attributes and value, hashes the value
+    /// to create a stable [`ExprKey`], and stores it in the arena. It returns
+    /// an [`ExprRef`] which can be used to retrieve the expression later.
     pub fn alloc(&mut self, attrs: Attrs, value: Value) -> ExprRef {
         let key = ExprKey(self.hasher.hash_one(&value));
 
@@ -42,6 +58,12 @@ impl ExprArena {
         ExprRef { key, ptr }
     }
 
+    /// Retrieves a node from the arena using an [`ExprRef`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the [`ExprRef`] contains an invalid pointer that is out of bounds
+    /// of the arena's internal storage.
     pub fn get(&self, node_ref: ExprRef) -> Node<'_> {
         let slot = &self.slots[node_ref.ptr.0];
         Node {
