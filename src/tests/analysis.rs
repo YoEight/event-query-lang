@@ -63,20 +63,26 @@ fn test_rename_non_existing_variable() {
 fn test_rename_subquery() {
     let mut arena = ExprArena::default();
     let query = parse_query(&mut arena, include_str!("./resources/rename_subquery.eql"));
-    insta::assert_yaml_snapshot!(query.and_then(|q| {
-        q.run_static_analysis(&arena, &Default::default())
-            .map(|q| q.view(&arena))
-    }));
+
+    insta::with_settings!({sort_maps => true}, {
+        insta::assert_yaml_snapshot!(query.and_then(|q| {
+            q.run_static_analysis(&arena, &Default::default())
+                .map(|q| q.view(&arena))
+        }))
+    });
 }
 
 #[test]
 fn test_analyze_valid_contains() {
     let mut arena = ExprArena::default();
     let query = parse_query(&mut arena, include_str!("./resources/valid_contains.eql"));
-    insta::assert_yaml_snapshot!(query.and_then(|q| {
-        q.run_static_analysis(&arena, &Default::default())
-            .map(|q| q.view(&arena))
-    }));
+
+    insta::with_settings!({sort_maps => true}, {
+        insta::assert_yaml_snapshot!(query.and_then(|q| {
+            q.run_static_analysis(&arena, &Default::default())
+                .map(|q| q.view(&arena))
+        }));
+    })
 }
 
 #[test]
@@ -164,10 +170,13 @@ fn test_analyze_prevent_using_aggregate_with_source_based_props() {
 fn test_analyze_valid_agg_usage() {
     let mut arena = ExprArena::default();
     let query = parse_query(&mut arena, include_str!("./resources/valid_agg_usage.eql"));
-    insta::assert_yaml_snapshot!(query.and_then(|q| {
-        q.run_static_analysis(&arena, &Default::default())
-            .map(|q| q.view(&arena))
-    }));
+
+    insta::with_settings!({sort_maps => true}, {
+        insta::assert_yaml_snapshot!(query.and_then(|q| {
+            q.run_static_analysis(&arena, &Default::default())
+                .map(|q| q.view(&arena))
+        }))
+    });
 }
 
 #[test]
@@ -318,10 +327,13 @@ fn test_analyze_lowercase_function() {
         &mut arena,
         include_str!("./resources/lowercase_function.eql"),
     );
-    insta::assert_yaml_snapshot!(query.and_then(|q| {
-        q.run_static_analysis(&arena, &Default::default())
-            .map(|q| q.view(&arena))
-    }));
+
+    insta::with_settings!({sort_maps => true}, {
+        insta::assert_yaml_snapshot!(query.and_then(|q| {
+            q.run_static_analysis(&arena, &Default::default())
+                .map(|q| q.view(&arena))
+        }))
+    });
 }
 
 #[test]
@@ -422,10 +434,13 @@ fn test_analyze_accept_group_by_with_agg_rec() {
         &mut arena,
         include_str!("./resources/accept_group_by_with_agg_rec.eql"),
     );
-    insta::assert_yaml_snapshot!(query.and_then(|q| {
-        q.run_static_analysis(&arena, &Default::default())
-            .map(|q| q.view(&arena))
-    }));
+
+    insta::with_settings!({sort_maps => true}, {
+        insta::assert_yaml_snapshot!(query.and_then(|q| {
+            q.run_static_analysis(&arena, &Default::default())
+                .map(|q| q.view(&arena))
+        }))
+    });
 }
 
 #[test]
@@ -448,8 +463,11 @@ fn test_accept_valid_having_clause() {
         &mut arena,
         include_str!("./resources/valid_having_clause.eql"),
     );
-    insta::assert_yaml_snapshot!(query.and_then(|q| {
-        q.run_static_analysis(&arena, &Default::default())
-            .map(|q| q.view(&arena))
-    }));
+
+    insta::with_settings!({sort_maps => true}, {
+        insta::assert_yaml_snapshot!(query.and_then(|q| {
+            q.run_static_analysis(&arena, &Default::default())
+                .map(|q| q.view(&arena))
+        }))
+    });
 }

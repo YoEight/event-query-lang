@@ -1331,7 +1331,7 @@ impl<'a> Analysis<'a> {
                 }
             }
 
-            Value::Access(access) => Ok(self.analyze_access(node.attrs, access.target, expect)?),
+            Value::Access(_) => Ok(self.analyze_access(node.attrs, node.node_ref, expect)?),
 
             Value::App(app) => {
                 if let Some(tpe) = self.options.default_scope.entries.get(app.func.as_str())
