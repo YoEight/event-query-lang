@@ -567,7 +567,7 @@ fn binding_pow(op: Operator) -> (u64, u64) {
 /// 3. Additive (`+`, `-`)
 /// 4. Comparison (`<`, `<=`, `>`, `>=`, `==`, `!=`)
 /// 5. Logical (`AND`, `OR`, `XOR`)
-pub fn parse<'a>(arena: &'a mut ExprArena, input: &'a [Token<'a>]) -> ParseResult<Query<Raw>> {
+pub(crate) fn parse<'a>(arena: &'a mut ExprArena, input: &'a [Token<'a>]) -> ParseResult<Query<Raw>> {
     let mut parser = Parser::new(arena, input);
 
     parser.parse_query()

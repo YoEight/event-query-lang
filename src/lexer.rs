@@ -33,7 +33,7 @@ use nom::{IResult, Parser};
 /// - **Strings**: Double-quoted string literals (e.g., `"hello"`)
 /// - **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `<`, `<=`, `>`, `>=`), logical (`AND`, `OR`, `XOR`, `NOT`)
 /// - **Symbols**: Structural characters (`(`, `)`, `[`, `]`, `{`, `}`, `.`, `,`, `:`)
-pub fn tokenize(input: &str) -> Result<Vec<Token<'_>>, LexerError> {
+pub(crate) fn tokenize(input: &str) -> Result<Vec<Token<'_>>, LexerError> {
     let mut input = Text::new(input);
     let mut tokens = Vec::new();
 

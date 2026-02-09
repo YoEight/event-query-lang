@@ -2,7 +2,6 @@ use crate::{
     Type,
     arena::ExprArena,
     lexer::tokenize,
-    parse_query,
     parser::Parser,
     prelude::{Analysis, AnalysisContext, AnalysisOptions},
 };

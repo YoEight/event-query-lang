@@ -104,6 +104,14 @@ impl AnalysisOptions {
 
         self
     }
+
+    pub fn empty() -> Self {
+        Self {
+            default_scope: Scope::default(),
+            event_type_info: Type::default(),
+            custom_types: HashSet::default(),
+        }
+    }
 }
 
 impl Default for AnalysisOptions {
@@ -469,7 +477,7 @@ impl Default for AnalysisOptions {
 /// # Returns
 ///
 /// Returns a typed query on success, or an `AnalysisError` if type checking fails.
-pub fn static_analysis(
+pub(crate) fn static_analysis(
     arena: &ExprArena,
     options: &AnalysisOptions,
     query: Query<Raw>,
