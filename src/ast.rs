@@ -11,10 +11,8 @@
 //! - [`Value`] - The various kinds of expression values (literals, operators, etc.)
 //! - [`Source`] - Data sources in FROM clauses
 //!
-use crate::arena::ExprArena;
 use crate::{
-    analysis::{AnalysisOptions, Typed, static_analysis},
-    error::{AnalysisError, Error},
+    error::AnalysisError,
     token::{Operator, Token},
 };
 use ordered_float::OrderedFloat;
