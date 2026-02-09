@@ -24,10 +24,11 @@ A complete lexer and parser for EventQL (EQL), a query language designed for eve
 ## Quick Start
 
 ```rust
-use eventql_parser::parse_query;
+use eventql_parser::Session;
 
 fn main() {
-    let query = parse_query(
+    let mut session = Session::builder().build();
+    let query = session.parse(
         "FROM e IN events WHERE e.id == 1 PROJECT INTO e"
     ).unwrap();
 
