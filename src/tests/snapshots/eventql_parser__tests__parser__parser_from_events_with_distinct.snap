@@ -1,6 +1,6 @@
 ---
 source: src/tests/parser.rs
-expression: parse(tokens.as_slice())
+expression: "parse(&mut arena, tokens.as_slice()).map(|q| q.view(&arena))"
 ---
 Ok:
   attrs:
@@ -63,7 +63,11 @@ Ok:
         col: 23
     value:
       Record:
-        - name: id
+        - attrs:
+            pos:
+              line: 3
+              col: 25
+          name: id
           value:
             attrs:
               pos:
@@ -79,7 +83,11 @@ Ok:
                   value:
                     Id: e
                 field: id
-        - name: price
+        - attrs:
+            pos:
+              line: 3
+              col: 35
+          name: price
           value:
             attrs:
               pos:

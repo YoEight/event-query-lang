@@ -11,18 +11,20 @@
 //! - [`Value`] - The various kinds of expression values (literals, operators, etc.)
 //! - [`Source`] - Data sources in FROM clauses
 //!
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Display},
-    mem,
-};
-
+use crate::arena::ExprArena;
 use crate::{
     analysis::{AnalysisOptions, Typed, static_analysis},
     error::{AnalysisError, Error},
     token::{Operator, Token},
 };
+use ordered_float::OrderedFloat;
+use rustc_hash::FxHashMap;
 use serde::Serialize;
+use std::hash::{Hash, Hasher};
+use std::{
+    fmt::{self, Display},
+    mem,
+};
 
 /// Position information for source code locations.
 ///
@@ -174,7 +176,7 @@ pub enum Type {
     /// Array type
     Array(Box<Type>),
     /// Record (object) type
-    Record(BTreeMap<String, Type>),
+    Record(FxHashMap<String, Type>),
     /// Subject pattern type
     Subject,
     /// Function type with support for optional parameters.
@@ -233,10 +235,12 @@ pub enum Type {
     ///
     /// ```
     /// use eventql_parser::{parse_query, prelude::AnalysisOptions};
+    /// use eventql_parser::arena::ExprArena;
     ///
-    /// let query = parse_query("FROM e IN events PROJECT INTO { ts: e.data.timestamp as CustomTimestamp }").unwrap();
+    /// let mut arena = ExprArena::default();
+    /// let query = parse_query(&mut arena, "FROM e IN events PROJECT INTO { ts: e.data.timestamp as CustomTimestamp }").unwrap();
     /// let options = AnalysisOptions::default().add_custom_type("CustomTimestamp");
-    /// let typed_query = query.run_static_analysis(&options).unwrap();
+    /// let typed_query = query.run_static_analysis(&arena, &options).unwrap();
     /// ```
     Custom(String),
 }
@@ -348,7 +352,7 @@ impl Display for Type {
 }
 
 impl Type {
-    pub fn as_record_or_panic_mut(&mut self) -> &mut BTreeMap<String, Type> {
+    pub fn as_record_or_panic_mut(&mut self) -> &mut FxHashMap<String, Type> {
         if let Self::Record(r) = self {
             return r;
         }
@@ -360,7 +364,7 @@ impl Type {
     ///
     /// * If `self` is `Type::Unspecified` then `self` is updated to the more specific `Type`.
     /// * If `self` is `Type::Subject` and is checked against a `Type::String` then `self` is updated to `Type::String`
-    pub fn check(self, attrs: &Attrs, other: Type) -> Result<Type, AnalysisError> {
+    pub fn check(self, attrs: Attrs, other: Type) -> Result<Type, AnalysisError> {
         match (self, other) {
             (Self::Unspecified, other) => Ok(other),
             (this, Self::Unspecified) => Ok(this),
@@ -397,8 +401,8 @@ impl Type {
                     return Ok(Self::Record(a));
                 }
 
-                for (ak, bk) in a.keys().zip(b.keys()) {
-                    if ak != bk {
+                for bk in b.keys() {
+                    if !a.contains_key(bk) {
                         return Err(AnalysisError::TypeMismatch(
                             attrs.pos.line,
                             attrs.pos.col,
@@ -408,7 +412,8 @@ impl Type {
                     }
                 }
 
-                for (av, bv) in a.values_mut().zip(b.into_values()) {
+                for (bk, bv) in b.into_iter() {
+                    let av = a.get_mut(&bk).unwrap();
                     let a = mem::take(av);
                     *av = a.check(attrs, bv)?;
                 }
@@ -467,7 +472,7 @@ impl Type {
 ///
 /// These attributes provide metadata about an expression, including its
 /// position in the source code, scope information, and type information.
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct Attrs {
     /// Source position of this expression
     pub pos: Pos,
@@ -480,17 +485,53 @@ impl Attrs {
     }
 }
 
+impl<'a> From<Token<'a>> for Attrs {
+    fn from(value: Token<'a>) -> Self {
+        Self { pos: value.into() }
+    }
+}
+
+/// Internal pointer to an expression in the arena.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize)]
+pub struct ExprPtr(pub(crate) usize);
+
+/// Internal hash key for an expression to provide structural equality.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
+pub struct ExprKey(pub(crate) u64);
+
+/// A reference to an expression stored in an [`ExprArena`].
+///
+/// This is a lightweight handle that combines a hash key for fast comparison
+/// and a pointer for fast lookup.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize)]
+pub struct ExprRef {
+    pub(crate) key: ExprKey,
+    pub(crate) ptr: ExprPtr,
+}
+
+impl Hash for ExprRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
+    }
+}
+
 /// An expression with metadata.
 ///
 /// This is the fundamental building block of the AST. Every expression
 /// carries attributes (position, scope, type) and a value that determines
 /// what kind of expression it is.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Expr {
     /// Metadata about this expression
     pub attrs: Attrs,
     /// The value/kind of this expression
-    pub value: Value,
+    pub node_ref: ExprRef,
+}
+
+impl Hash for Expr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.node_ref.hash(state);
+    }
 }
 
 /// Field access expression (e.g., `e.data.price`).
@@ -502,10 +543,10 @@ pub struct Expr {
 ///
 /// In the query `WHERE e.data.user.id == 1`, the expression `e.data.user.id`
 /// is parsed as nested `Access` nodes.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Access {
     /// The target expression being accessed
-    pub target: Box<Expr>,
+    pub target: ExprRef,
     /// The name of the field being accessed
     pub field: String,
 }
@@ -517,23 +558,25 @@ pub struct Access {
 /// # Examples
 ///
 /// In the query `WHERE count(e.items) > 5`, the `count(e.items)` is an `App` node.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct App {
     /// Name of the function being called
     pub func: String,
     /// Arguments passed to the function
-    pub args: Vec<Expr>,
+    pub args: Vec<ExprRef>,
 }
 
 /// A field in a record literal (e.g., `{name: "Alice", age: 30}`).
 ///
 /// Represents a key-value pair in a record construction.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Field {
+    /// Field attributes
+    pub attrs: Attrs,
     /// Field name
     pub name: String,
     /// Field value expression
-    pub value: Expr,
+    pub expr: ExprRef,
 }
 
 /// Binary operation (e.g., `a + b`, `x == y`, `p AND q`).
@@ -545,14 +588,14 @@ pub struct Field {
 ///
 /// In `WHERE e.price > 100 AND e.active == true`, there are multiple
 /// binary operations: `>`, `==`, and `AND`.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct Binary {
     /// Left-hand side operand
-    pub lhs: Box<Expr>,
+    pub lhs: ExprRef,
     /// The operator
     pub operator: Operator,
     /// Right-hand side operand
-    pub rhs: Box<Expr>,
+    pub rhs: ExprRef,
 }
 
 /// Unary operation (e.g., `-x`, `NOT active`).
@@ -562,22 +605,22 @@ pub struct Binary {
 /// # Examples
 ///
 /// In `WHERE NOT e.deleted`, the `NOT e.deleted` is a unary operation.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct Unary {
     /// The operator (Add for +, Sub for -, Not for NOT)
     pub operator: Operator,
     /// The operand expression
-    pub expr: Box<Expr>,
+    pub expr: ExprRef,
 }
 
 /// The kind of value an expression represents.
 ///
 /// This enum contains all the different types of expressions that can appear
 /// in an EventQL query, from simple literals to complex operations.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub enum Value {
     /// Numeric literal (e.g., `42`, `3.14`)
-    Number(f64),
+    Number(OrderedFloat<f64>),
     /// String literal (e.g., `"hello"`)
     String(String),
     /// Boolean literal (`true` or `false`)
@@ -585,7 +628,7 @@ pub enum Value {
     /// Identifier (e.g., variable name `e`, `x`)
     Id(String),
     /// Array literal (e.g., `[1, 2, 3]`)
-    Array(Vec<Expr>),
+    Array(Vec<ExprRef>),
     /// Record literal (e.g., `{name: "Alice", age: 30}`)
     Record(Vec<Field>),
     /// Field access (e.g., `e.data.price`)
@@ -597,7 +640,7 @@ pub enum Value {
     /// Unary operation (e.g., `-x`, `NOT active`)
     Unary(Unary),
     /// Grouped/parenthesized expression (e.g., `(a + b)`)
-    Group(Box<Expr>),
+    Group(ExprRef),
 }
 
 /// A source binding. A name attached to a source of events.
@@ -658,7 +701,7 @@ pub enum SourceKind<A> {
 #[derive(Debug, Clone, Serialize)]
 pub struct OrderBy {
     /// Expression to sort by
-    pub expr: Expr,
+    pub expr: ExprRef,
     /// Sort direction (ascending or descending)
     pub order: Order,
 }
@@ -685,10 +728,10 @@ pub enum Order {
 #[derive(Debug, Clone, Serialize)]
 pub struct GroupBy {
     /// Expression to group by
-    pub expr: Expr,
+    pub expr: ExprRef,
 
     /// Predicate to filter groups after aggregation
-    pub predicate: Option<Expr>,
+    pub predicate: Option<ExprRef>,
 }
 
 /// Result set limit specification.
@@ -736,8 +779,11 @@ pub struct Raw;
 ///
 /// ```
 /// use eventql_parser::parse_query;
+/// use eventql_parser::arena::ExprArena;
 ///
+/// let mut arena = ExprArena::default();
 /// let query = parse_query(
+///     &mut arena,
 ///     "FROM e IN events \
 ///      WHERE e.price > 100 \
 ///      ORDER BY e.timestamp DESC \
@@ -757,7 +803,7 @@ pub struct Query<A> {
     /// FROM clause sources (must have at least one)
     pub sources: Vec<Source<A>>,
     /// Optional WHERE clause filter predicate
-    pub predicate: Option<Expr>,
+    pub predicate: Option<ExprRef>,
     /// Optional GROUP BY clause expression
     pub group_by: Option<GroupBy>,
     /// Optional ORDER BY clause
@@ -765,7 +811,7 @@ pub struct Query<A> {
     /// Optional LIMIT clause (TOP or SKIP)
     pub limit: Option<Limit>,
     /// PROJECT INTO clause expression (required)
-    pub projection: Expr,
+    pub projection: ExprRef,
     /// Remove duplicate rows from the query's results
     pub distinct: bool,
     /// Type-level metadata about the query's analysis state.
@@ -804,7 +850,11 @@ impl Query<Raw> {
     /// # Returns
     ///
     /// Returns a typed query on success, or an error if type checking fails.
-    pub fn run_static_analysis(self, options: &AnalysisOptions) -> crate::Result<Query<Typed>> {
-        static_analysis(options, self).map_err(Error::Analysis)
+    pub fn run_static_analysis(
+        self,
+        arena: &ExprArena,
+        options: &AnalysisOptions,
+    ) -> crate::Result<Query<Typed>> {
+        static_analysis(arena, options, self).map_err(Error::Analysis)
     }
 }

@@ -4,6 +4,7 @@
 //! designed for event sourcing systems. It allows you to parse EQL query strings into
 //! an abstract syntax tree (AST) that can be analyzed or executed.
 mod analysis;
+pub mod arena;
 mod ast;
 mod error;
 mod lexer;
@@ -12,6 +13,7 @@ mod parser;
 mod tests;
 mod token;
 
+use crate::arena::ExprArena;
 use crate::prelude::{parse, tokenize};
 pub use ast::*;
 
@@ -38,13 +40,17 @@ pub type Result<A> = std::result::Result<A, error::Error>;
 ///
 /// ```
 /// use eventql_parser::parse_query;
+/// use eventql_parser::arena::ExprArena;
+///
+/// let mut arena = ExprArena::default();
 ///
 /// // Parse a simple query
-/// let query = parse_query("FROM e IN events WHERE e.id == 1 PROJECT INTO e").unwrap();
+/// let query = parse_query(&mut arena, "FROM e IN events WHERE e.id == 1 PROJECT INTO e").unwrap();
 /// assert!(query.predicate.is_some());
 ///
 /// // Parse with multiple clauses
 /// let complex = parse_query(
+///     &mut arena,
 ///     "FROM e IN events \
 ///      WHERE e.price > 100 \
 ///      ORDER BY e.timestamp DESC \
@@ -55,12 +61,12 @@ pub type Result<A> = std::result::Result<A, error::Error>;
 /// assert!(complex.limit.is_some());
 ///
 /// // Handle errors
-/// match parse_query("FROM e IN events WHERE") {
+/// match parse_query(&mut arena, "FROM e IN events WHERE") {
 ///     Ok(_) => println!("Parsed successfully"),
 ///     Err(e) => println!("Parse error: {}", e),
 /// }
 /// ```
-pub fn parse_query(input: &str) -> Result<Query<Raw>> {
+pub fn parse_query(arena: &mut ExprArena, input: &str) -> Result<Query<Raw>> {
     let tokens = tokenize(input)?;
-    Ok(parse(tokens.as_slice())?)
+    Ok(parse(arena, tokens.as_slice())?)
 }

@@ -1,6 +1,6 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.run_static_analysis(&Default::default())"
+expression: "query.and_then(|q|\n{\n    q.run_static_analysis(&arena, &Default::default()).map(|q| q.view(&arena))\n})"
 ---
 Ok:
   attrs:

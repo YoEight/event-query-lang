@@ -1,6 +1,6 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.run_static_analysis(&Default::default())"
+expression: "query.and_then(|q|\n{\n    q.run_static_analysis(&arena, &Default::default()).map(|q| q.view(&arena))\n})"
 ---
 Ok:
   attrs:
@@ -95,7 +95,11 @@ Ok:
         col: 14
     value:
       Record:
-        - name: department
+        - attrs:
+            pos:
+              line: 4
+              col: 5
+          name: department
           value:
             attrs:
               pos:
@@ -127,7 +131,11 @@ Ok:
                                   Id: e
                               field: data
                         field: department
-        - name: average
+        - attrs:
+            pos:
+              line: 5
+              col: 5
+          name: average
           value:
             attrs:
               pos:

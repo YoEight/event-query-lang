@@ -1,6 +1,6 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.run_static_analysis(&AnalysisOptions::default().add_custom_type(\"Foobar\"))"
+expression: "query.and_then(|q|\n{\n    q.run_static_analysis(&arena,\n    &AnalysisOptions::default().add_custom_type(\"Foobar\"),).map(|q|\n    q.view(&arena))\n})"
 ---
 Ok:
   attrs:
@@ -26,7 +26,11 @@ Ok:
         col: 14
     value:
       Record:
-        - name: date
+        - attrs:
+            pos:
+              line: 2
+              col: 16
+          name: date
           value:
             attrs:
               pos:
