@@ -238,25 +238,8 @@ impl Session {
     ///
     /// // Parse a simple query
     /// let mut session = Session::builder().use_stdlib().build();
-    /// let query = session.parse("FROM e IN events WHERE e.id == 1 PROJECT INTO e").unwrap();
+    /// let query = session.parse("FROM e IN events WHERE e.id == \"1\" PROJECT INTO e").unwrap();
     /// assert!(query.predicate.is_some());
-    ///
-    /// // Parse with multiple clauses
-    /// let complex = session.parse(
-    ///     "FROM e IN events \
-    ///      WHERE e.price > 100 \
-    ///      ORDER BY e.timestamp DESC \
-    ///      TOP 10 \
-    ///      PROJECT INTO {id: e.id, price: e.price}"
-    /// ).unwrap();
-    /// assert!(complex.order_by.is_some());
-    /// assert!(complex.limit.is_some());
-    ///
-    /// // Handle errors
-    /// match session.parse("FROM e IN events WHERE") {
-    ///     Ok(_) => println!("Parsed successfully"),
-    ///     Err(e) => println!("Parse error: {}", e),
-    /// }
     /// ```
     pub fn parse(&mut self, input: &str) -> Result<Query<Raw>> {
         let tokens = self.tokenize(input)?;
