@@ -1,8 +1,9 @@
 ---
 source: src/tests/parser.rs
-expression: parse(tokens.as_slice())
+expression: query.map(|q| q.view(&session.arena))
 ---
 Err:
-  ExpectedType:
-    - 3
-    - 37
+  Parser:
+    ExpectedType:
+      - 3
+      - 37

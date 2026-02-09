@@ -14,12 +14,12 @@ mod tests;
 mod token;
 
 use crate::arena::ExprArena;
-use crate::prelude::{AnalysisOptions, parse, Typed, static_analysis};
+use crate::lexer::tokenize;
+use crate::prelude::{AnalysisOptions, Typed, parse, static_analysis};
+use crate::token::Token;
 pub use ast::*;
 use rustc_hash::FxHashMap;
 use unicase::Ascii;
-use crate::lexer::tokenize;
-use crate::token::Token;
 
 /// Convenience module that re-exports all public types and functions.
 ///
@@ -34,7 +34,6 @@ pub mod prelude {
 }
 
 pub type Result<A> = std::result::Result<A, error::Error>;
-
 
 pub struct SessionBuilder {
     options: AnalysisOptions,
@@ -106,14 +105,18 @@ impl SessionBuilder {
 
     pub fn declare_custom_type_when(mut self, test: bool, name: &str) -> Self {
         if test {
-            self.options.custom_types.insert(Ascii::new(name.to_owned()));
+            self.options
+                .custom_types
+                .insert(Ascii::new(name.to_owned()));
         }
 
         self
     }
 
     pub fn declare_custom_type(mut self, name: &str) -> Self {
-        self.options.custom_types.insert(Ascii::new(name.to_owned()));
+        self.options
+            .custom_types
+            .insert(Ascii::new(name.to_owned()));
         self
     }
 
