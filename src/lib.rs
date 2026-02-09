@@ -35,15 +35,42 @@ pub mod prelude {
 
 pub type Result<A> = std::result::Result<A, error::Error>;
 
+/// `SessionBuilder` is a builder for `Session` objects.
+///
+/// It allows for the configuration of analysis options, such as declaring
+/// functions (both regular and aggregate), event types, and custom types,
+/// before building an `EventQL` parsing session.
 pub struct SessionBuilder {
     options: AnalysisOptions,
 }
 
 impl SessionBuilder {
+    /// Declares a new function with the given name, arguments, and return type.
+    ///
+    /// This function adds a new entry to the session's default scope, allowing
+    /// the parser to recognize and type-check calls to this function.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the function.
+    /// * `args` - The arguments the function accepts, which can be converted into `FunArgs`.
+    /// * `result` - The return type of the function.
     pub fn declare_func(self, name: &str, args: impl Into<FunArgs>, result: Type) -> Self {
         self.declare_func_when(true, name, args, result)
     }
 
+    /// Conditionally declares a new function with the given name, arguments, and return type.
+    ///
+    /// This function behaves like `declare_func` but only declares the function
+    /// if the `test` argument is `true`. This is useful for conditionally
+    /// including functions based on configuration or features.
+    ///
+    /// # Arguments
+    ///
+    /// * `test` - A boolean indicating whether to declare the function.
+    /// * `name` - The name of the function.
+    /// * `args` - The arguments the function accepts, which can be converted into `FunArgs`.
+    /// * `result` - The return type of the function.
     pub fn declare_func_when(
         mut self,
         test: bool,
@@ -65,10 +92,31 @@ impl SessionBuilder {
         self
     }
 
+    /// Declares a new aggregate function with the given name, arguments, and return type.
+    ///
+    /// Similar to `declare_func`, but marks the function as an aggregate function.
+    /// Aggregate functions have specific rules for where they can be used in an EQL query.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the aggregate function.
+    /// * `args` - The arguments the aggregate function accepts.
+    /// * `result` - The return type of the aggregate function.
     pub fn declare_agg_func(self, name: &str, args: impl Into<FunArgs>, result: Type) -> Self {
         self.declare_agg_func_when(true, name, args, result)
     }
 
+    /// Conditionally declares a new aggregate function.
+    ///
+    /// Behaves like `declare_agg_func` but only declares the function
+    /// if the `test` argument is `true`.
+    ///
+    /// # Arguments
+    ///
+    /// * `test` - A boolean indicating whether to declare the aggregate function.
+    /// * `name` - The name of the aggregate function.
+    /// * `args` - The arguments the aggregate function accepts.
+    /// * `result` - The return type of the aggregate function.
     pub fn declare_agg_func_when(
         mut self,
         test: bool,
@@ -90,6 +138,16 @@ impl SessionBuilder {
         self
     }
 
+    /// Conditionally declares the expected type of event records.
+    ///
+    /// This type information is crucial for type-checking event properties
+    /// accessed in EQL queries (e.g., `e.id`, `e.data.value`).
+    /// The declaration only happens if `test` is `true`.
+    ///
+    /// # Arguments
+    ///
+    /// * `test` - A boolean indicating whether to declare the event type.
+    /// * `tpe` - The `Type` representing the structure of event records.
     pub fn declare_event_type_when(mut self, test: bool, tpe: Type) -> Self {
         if test {
             self.options.event_type_info = tpe;
@@ -98,11 +156,29 @@ impl SessionBuilder {
         self
     }
 
+    /// Declares the expected type of event records.
+    ///
+    /// This type information is crucial for type-checking event properties
+    /// accessed in EQL queries (e.g., `e.id`, `e.data.value`).
+    ///
+    /// # Arguments
+    ///
+    /// * `tpe` - The `Type` representing the structure of event records.
     pub fn declare_event_type(mut self, tpe: Type) -> Self {
         self.options.event_type_info = tpe;
         self
     }
 
+    /// Conditionally declares a custom type that can be used in EQL queries.
+    ///
+    /// This allows the type-checker to recognize and validate custom types
+    /// that might be used in type conversions or record definitions.
+    /// The declaration only happens if `test` is `true`.
+    ///
+    /// # Arguments
+    ///
+    /// * `test` - A boolean indicating whether to declare the custom type.
+    /// * `name` - The name of the custom type.
     pub fn declare_custom_type_when(mut self, test: bool, name: &str) -> Self {
         if test {
             self.options
@@ -113,6 +189,14 @@ impl SessionBuilder {
         self
     }
 
+    /// Declares a custom type that can be used in EQL queries.
+    ///
+    /// This allows the type-checker to recognize and validate custom types
+    /// that might be used in type conversions or record definitions.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the custom type.
     pub fn declare_custom_type(mut self, name: &str) -> Self {
         self.options
             .custom_types
@@ -120,6 +204,13 @@ impl SessionBuilder {
         self
     }
 
+    /// Includes the standard library of functions and event types in the session.
+    ///
+    /// This method pre-configures the `SessionBuilder` with a set of commonly
+    /// used functions (e.g., mathematical, string, date/time) and a default
+    /// event type definition. Calling this method is equivalent to calling
+    /// `declare_func` and `declare_agg_func` for all standard library functions,
+    /// and `declare_event_type` for the default event structure.
     pub fn use_stdlib(self) -> Self {
         self.declare_func("ABS", vec![Type::Number], Type::Number)
             .declare_func("CEIL", vec![Type::Number], Type::Number)
@@ -196,6 +287,10 @@ impl SessionBuilder {
             ])))
     }
 
+    /// Builds the `Session` object with the configured analysis options.
+    ///
+    /// This consumes the `SessionBuilder` and returns a `Session` instance
+    /// ready for tokenizing, parsing, and analyzing EventQL queries.
     pub fn build(self) -> Session {
         Session {
             arena: ExprArena::default(),
@@ -212,12 +307,24 @@ impl Default for SessionBuilder {
     }
 }
 
+/// `Session` is the main entry point for parsing and analyzing EventQL queries.
+///
+/// It holds the necessary context, such as the expression arena and analysis options,
+/// to perform lexical analysis, parsing, and static analysis of EQL query strings.
 pub struct Session {
     arena: ExprArena,
     options: AnalysisOptions,
 }
 
 impl Session {
+    /// Creates a new `SessionBuilder` for configuring and building a `Session`.
+    ///
+    /// This is the recommended way to create a `Session` instance, allowing
+    /// for customization of functions, event types, and custom types.
+    ///
+    /// # Returns
+    ///
+    /// A new `SessionBuilder` instance.
     pub fn builder() -> SessionBuilder {
         SessionBuilder::default()
     }
