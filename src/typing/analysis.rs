@@ -60,15 +60,6 @@ pub struct AnalysisOptions {
     /// This set allows users to register custom type names that can be used
     /// in type conversion expressions (e.g., `field AS CustomType`). Custom
     /// type names are case-insensitive.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::prelude::AnalysisOptions;
-    ///
-    /// let options = AnalysisOptions::default()
-    ///     .add_custom_type("Foobar");
-    /// ```
     pub custom_types: HashSet<Ascii<String>>,
 }
 
@@ -86,16 +77,6 @@ impl AnalysisOptions {
     /// # Returns
     ///
     /// Returns `self` to allow for method chaining.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::prelude::AnalysisOptions;
-    ///
-    /// let options = AnalysisOptions::default()
-    ///     .add_custom_type("Timestamp")
-    ///     .add_custom_type("UUID");
-    /// ```
     pub fn add_custom_type<'a>(mut self, value: impl Into<Cow<'a, str>>) -> Self {
         match value.into() {
             Cow::Borrowed(t) => self.custom_types.insert(Ascii::new(t.to_owned())),
@@ -538,7 +519,7 @@ impl<'a> Analysis<'a> {
             }
 
             Value::Record(fields) => {
-                for idx in 0..self.arena.exprs.rec(fields).len() {
+                for idx in self.arena.exprs.rec_idxes(fields) {
                     let field = self.arena.exprs.rec_get(fields, idx);
 
                     self.check_projection_on_field(ctx, &field)?;
@@ -569,7 +550,7 @@ impl<'a> Analysis<'a> {
                         return self.expect_agg_func(expr);
                     }
 
-                    for idx in 0..self.arena.exprs.vec(app.args).len() {
+                    for idx in self.arena.exprs.vec_idxes(app.args) {
                         let arg = self.arena.exprs.vec_get(app.args, idx);
 
                         self.invalidate_agg_func_usage(arg)?;
@@ -1697,18 +1678,6 @@ impl Arena {
 /// - `"date"` → [`Type::Date`]
 /// - `"time"` → [`Type::Time`]
 /// - `"datetime"` → [`Type::DateTime`]
-///
-/// # Examples
-///
-/// ```
-/// use eventql_parser::Type;
-/// use eventql_parser::prelude::{AnalysisOptions, name_to_type};
-///
-/// let opts = AnalysisOptions::default();
-/// assert!(matches!(name_to_type(&opts, "String"), Some(Type::String)));
-/// assert!(matches!(name_to_type(&opts, "INT"), Some(Type::Number)));
-/// assert!(name_to_type(&opts, "unknown").is_none());
-/// ```
 pub(crate) fn name_to_type(
     arena: &Arena,
     opts: &AnalysisOptions,

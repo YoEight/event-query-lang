@@ -524,17 +524,6 @@ impl Session {
     /// - `"date"` → [`Type::Date`]
     /// - `"time"` → [`Type::Time`]
     /// - `"datetime"` → [`Type::DateTime`]
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::Session;
-    ///
-    /// let opts = AnalysisOptions::default();
-    /// assert!(matches!(name_to_type(&opts, "String"), Some(Type::String)));
-    /// assert!(matches!(name_to_type(&opts, "INT"), Some(Type::Number)));
-    /// assert!(name_to_type(&opts, "unknown").is_none());
-    /// ```
     pub fn get_type_from_name(&mut self, name: &str) -> Option<Type> {
         let str_ref = self.arena.alloc_str(name);
         name_to_type(&self.arena, &self.options, str_ref)

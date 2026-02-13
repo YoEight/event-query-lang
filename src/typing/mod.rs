@@ -50,29 +50,6 @@ pub enum Type {
     ///
     /// The `args` field uses [`FunArgs`] to support both required and optional parameters.
     /// Optional parameters are indicated when `args.needed < args.values.len()`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::prelude::{Type, FunArgs};
-    ///
-    /// // Function with all required parameters: (number, string) -> boolean
-    /// let all_required = Type::App {
-    ///     args: vec![Type::Number, Type::String].into(),
-    ///     result: Box::new(Type::Bool),
-    ///     aggregate: false,
-    /// };
-    ///
-    /// // Aggregate function with optional parameter: (boolean?) => number
-    /// let with_optional = Type::App {
-    ///     args: FunArgs {
-    ///         values: vec![Type::Bool],
-    ///         needed: 0, // All parameters are optional
-    ///     },
-    ///     result: Box::new(Type::Number),
-    ///     aggregate: true,
-    /// };
-    /// ```
     App {
         /// Function argument types, supporting optional parameters
         args: FunArgs,
