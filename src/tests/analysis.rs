@@ -207,10 +207,7 @@ fn test_typecheck_datetime_contravariance_1() {
     let event_type = session.options.event_type_info;
     let mut analysis = session.analysis();
 
-    analysis
-        .scope_mut()
-        .entries
-        .insert("e".to_string(), event_type);
+    analysis.test_declare("e", event_type);
 
     // `e.time` is a `Type::DateTime` but it will typecheck if a `Type::Date` is expected
     insta::assert_yaml_snapshot!(analysis.analyze_expr(

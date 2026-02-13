@@ -1,6 +1,6 @@
 ---
 source: src/tests/analysis.rs
-expression: "query.and_then(|q|\n{\n    q.run_static_analysis(&arena, &Default::default()).map(|q| q.view(&arena))\n})"
+expression: "query.and_then(|q|\n{ session.run_static_analysis(q).map(|q| q.view(&session.arena)) })"
 ---
 Ok:
   attrs:
@@ -38,7 +38,7 @@ Ok:
                 col: 24
             value:
               App:
-                func: COUNT
+                func: count
                 args:
                   - attrs:
                       pos:

@@ -1,6 +1,5 @@
-use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use rustc_hash::FxHashMap;
-use serde::{Serialize, ser::SerializeMap};
+use serde::Serialize;
 use std::{borrow::Cow, collections::HashSet, mem};
 use unicase::Ascii;
 
@@ -101,31 +100,43 @@ impl AnalysisOptions {
 /// A scope tracks the variables and their types that are currently in scope
 /// during type checking. This is used to resolve variable references and
 /// ensure type correctness.
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Serialize, Debug)]
 pub struct Scope {
-    /// Map of variable names to their types.
-    pub entries: CaseInsensitiveHashMap<Type>,
-}
-
-impl Serialize for Scope {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut map = serializer.serialize_map(Some(self.entries.len()))?;
-
-        for (key, value) in self.entries.iter() {
-            map.serialize_entry(key.as_str(), value)?;
-        }
-
-        map.end()
-    }
+    #[serde(skip_serializing)]
+    entries: FxHashMap<StrRef, Type>,
 }
 
 impl Scope {
     /// Checks if the scope contains no entries.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// Declares a new variable binding in this scope.
+    ///
+    /// Returns `true` if the binding was newly inserted, or `false` if a binding
+    /// with the same name already existed (in which case the old value is replaced).
+    pub fn declare(&mut self, name: StrRef, tpe: Type) -> bool {
+        self.entries.insert(name, tpe).is_none()
+    }
+
+    /// Looks up the type of a variable by name.
+    ///
+    /// Returns `None` if the variable is not declared in this scope.
+    pub fn get(&self, name: StrRef) -> Option<Type> {
+        self.entries.get(&name).copied()
+    }
+
+    /// Returns a mutable reference to the type of a variable, allowing in-place updates.
+    ///
+    /// Returns `None` if the variable is not declared in this scope.
+    pub fn get_mut(&mut self, name: StrRef) -> Option<&mut Type> {
+        self.entries.get_mut(&name)
+    }
+
+    /// Returns `true` if a variable with the given name is declared in this scope.
+    pub fn exists(&self, name: StrRef) -> bool {
+        self.entries.contains_key(&name)
     }
 }
 
@@ -214,6 +225,12 @@ impl<'a> Analysis<'a> {
         } else {
             mem::take(&mut self.scope)
         }
+    }
+
+    #[cfg(test)]
+    pub fn test_declare(&mut self, name: &str, tpe: Type) -> bool {
+        let name = self.arena.strings.alloc_no_case(name);
+        self.scope.declare(name, tpe)
     }
 
     /// Performs static analysis on a parsed query.
@@ -329,16 +346,11 @@ impl<'a> Analysis<'a> {
             SourceKind::Subquery(query) => self.projection_type(query),
         };
 
-        if self
-            .scope
-            .entries
-            .insert(source.binding.name.clone(), tpe)
-            .is_some()
-        {
+        if !self.scope.declare(source.binding.name, tpe) {
             return Err(AnalysisError::BindingAlreadyExists(
                 source.binding.pos.line,
                 source.binding.pos.col,
-                source.binding.name,
+                self.arena.strings.get(source.binding.name).to_owned(),
             ));
         }
 
@@ -410,7 +422,7 @@ impl<'a> Analysis<'a> {
             )),
 
             Value::Id(id) => {
-                if let Some(tpe) = self.scope.entries.get(self.arena.strings.get(id)).cloned() {
+                if let Some(tpe) = self.scope.get(id) {
                     Ok(tpe)
                 } else {
                     Err(AnalysisError::VariableUndeclared(
@@ -432,11 +444,7 @@ impl<'a> Analysis<'a> {
                 loop {
                     match current.value {
                         Value::Id(name) => {
-                            if !self
-                                .scope
-                                .entries
-                                .contains_key(self.arena.strings.get(name))
-                            {
+                            if !self.scope.exists(name) {
                                 return Err(AnalysisError::VariableUndeclared(
                                     current.attrs.pos.line,
                                     current.attrs.pos.col,
@@ -499,7 +507,7 @@ impl<'a> Analysis<'a> {
             Value::Number(_) | Value::String(_) | Value::Bool(_) => Ok(()),
 
             Value::Id(id) => {
-                if self.scope.entries.contains_key(self.arena.strings.get(id)) {
+                if self.scope.exists(id) {
                     if ctx.use_agg_func {
                         return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
                             node.attrs.pos.line,
@@ -536,13 +544,9 @@ impl<'a> Analysis<'a> {
             Value::Access(access) => self.check_projection_on_field_expr(ctx, access.target),
 
             Value::App(app) => {
-                if let Some(Type::App { aggregate, .. }) = self
-                    .options
-                    .default_scope
-                    .entries
-                    .get(self.arena.strings.get(app.func))
+                if let Some(Type::App { aggregate, .. }) = self.options.default_scope.get(app.func)
                 {
-                    ctx.use_agg_func |= *aggregate;
+                    ctx.use_agg_func |= aggregate;
 
                     if ctx.use_agg_func && ctx.use_source_based {
                         return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
@@ -551,7 +555,7 @@ impl<'a> Analysis<'a> {
                         ));
                     }
 
-                    if *aggregate {
+                    if aggregate {
                         return self.expect_agg_func(expr);
                     }
 
@@ -580,11 +584,7 @@ impl<'a> Analysis<'a> {
         if let Value::App(app) = node.value
             && let Some(Type::App {
                 aggregate: true, ..
-            }) = self
-                .options
-                .default_scope
-                .entries
-                .get(self.arena.strings.get(app.func))
+            }) = self.options.default_scope.get(app.func)
         {
             for idx in 0..self.arena.exprs.vec(app.args).len() {
                 let arg = self.arena.exprs.vec_get(app.args, idx);
@@ -606,7 +606,7 @@ impl<'a> Analysis<'a> {
         let node = self.arena.exprs.get(expr);
         match node.value {
             Value::Id(id) => {
-                if self.scope.entries.contains_key(self.arena.strings.get(id)) {
+                if self.scope.exists(id) {
                     return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
@@ -642,15 +642,7 @@ impl<'a> Analysis<'a> {
     fn ensure_agg_param_is_source_bound(&self, expr: ExprRef) -> AnalysisResult<()> {
         let node = self.arena.exprs.get(expr);
         match node.value {
-            Value::Id(id)
-                if !self
-                    .options
-                    .default_scope
-                    .entries
-                    .contains_key(self.arena.strings.get(id)) =>
-            {
-                Ok(())
-            }
+            Value::Id(id) if !self.options.default_scope.exists(id) => Ok(()),
             Value::Access(access) => self.ensure_agg_param_is_source_bound(access.target),
             Value::Binary(binary) => self.ensure_agg_binary_op_is_source_bound(node.attrs, binary),
             Value::Unary(unary) => self.ensure_agg_param_is_source_bound(unary.expr),
@@ -682,11 +674,7 @@ impl<'a> Analysis<'a> {
     fn ensure_agg_binary_op_branch_is_source_bound(&self, expr: ExprRef) -> bool {
         let node = self.arena.exprs.get(expr);
         match node.value {
-            Value::Id(id) => !self
-                .options
-                .default_scope
-                .entries
-                .contains_key(self.arena.strings.get(id)),
+            Value::Id(id) => !self.options.default_scope.exists(id),
             Value::Array(exprs) => {
                 if self.arena.exprs.vec(exprs).is_empty() {
                     return false;
@@ -762,12 +750,8 @@ impl<'a> Analysis<'a> {
             }
 
             Value::App(app) => {
-                if let Some(Type::App { aggregate, .. }) = self
-                    .options
-                    .default_scope
-                    .entries
-                    .get(self.arena.strings.get(app.func))
-                    && *aggregate
+                if let Some(Type::App { aggregate, .. }) = self.options.default_scope.get(app.func)
+                    && aggregate
                 {
                     return Err(AnalysisError::WrongAggFunUsage(
                         node.attrs.pos.line,
@@ -824,8 +808,7 @@ impl<'a> Analysis<'a> {
     fn reject_constant_expr(&self, expr: ExprRef) -> AnalysisResult<()> {
         let node = self.arena.exprs.get(expr);
         match node.value {
-            Value::Id(id) if self.scope.entries.contains_key(self.arena.strings.get(id)) => Ok(()),
-
+            Value::Id(id) if self.scope.exists(id) => Ok(()),
             Value::Array(exprs) => {
                 let mut errored = None;
                 for idx in 0..self.arena.exprs.vec(exprs).len() {
@@ -922,15 +905,9 @@ impl<'a> Analysis<'a> {
             Value::Bool(_) => self.arena.type_check(node.attrs, expect, Type::Bool),
 
             Value::Id(id) => {
-                if let Some(tpe) = self
-                    .options
-                    .default_scope
-                    .entries
-                    .get(self.arena.strings.get(id))
-                    .copied()
-                {
+                if let Some(tpe) = self.options.default_scope.get(id) {
                     self.arena.type_check(node.attrs, expect, tpe)
-                } else if let Some(tpe) = self.scope.entries.get_mut(self.arena.strings.get(id)) {
+                } else if let Some(tpe) = self.scope.get_mut(id) {
                     *tpe = self.arena.type_check(node.attrs, mem::take(tpe), expect)?;
 
                     Ok(*tpe)
@@ -1029,12 +1006,7 @@ impl<'a> Analysis<'a> {
             Value::Access(_) => Ok(self.analyze_access(node.attrs, expr, expect)?),
 
             Value::App(app) => {
-                if let Some(tpe) = self
-                    .options
-                    .default_scope
-                    .entries
-                    .get(self.arena.strings.get(app.func))
-                    .copied()
+                if let Some(tpe) = self.options.default_scope.get(app.func)
                     && let Type::App {
                         args,
                         result,
@@ -1234,12 +1206,7 @@ impl<'a> Analysis<'a> {
             let node = arena.exprs.get(expr);
             match node.value {
                 Value::Id(id) => {
-                    if let Some(tpe) = sys
-                        .default_scope
-                        .entries
-                        .get(arena.strings.get(id))
-                        .copied()
-                    {
+                    if let Some(tpe) = sys.default_scope.get(id) {
                         if matches!(tpe, Type::Record(_)) {
                             Ok(State::new(Def::System(tpe)))
                         } else {
@@ -1249,12 +1216,11 @@ impl<'a> Analysis<'a> {
                                 display_type(arena, tpe),
                             ))
                         }
-                    } else if let Some(tpe) = scope.entries.get(arena.strings.get(id)).copied() {
+                    } else if let Some(tpe) = scope.get_mut(id) {
                         if matches!(tpe, Type::Unspecified) {
                             let record = arena.types.instantiate_record();
-                            scope
-                                .entries
-                                .insert(arena.strings.get(id), Type::Record(record));
+                            *tpe = Type::Record(record);
+
                             Ok(State::new(Def::User {
                                 parent: Parent {
                                     record,
@@ -1262,19 +1228,19 @@ impl<'a> Analysis<'a> {
                                 },
                                 tpe: Type::Record(record),
                             }))
-                        } else if let Type::Record(record) = tpe {
+                        } else if let Type::Record(record) = *tpe {
                             Ok(State::new(Def::User {
                                 parent: Parent {
                                     record,
                                     field: None,
                                 },
-                                tpe,
+                                tpe: *tpe,
                             }))
                         } else {
                             Err(AnalysisError::ExpectRecord(
                                 node.attrs.pos.line,
                                 node.attrs.pos.col,
-                                display_type(arena, tpe),
+                                display_type(arena, *tpe),
                             ))
                         }
                     } else {
@@ -1450,17 +1416,9 @@ impl<'a> Analysis<'a> {
             Value::String(_) => Type::String,
             Value::Bool(_) => Type::Bool,
             Value::Id(id) => {
-                if let Some(tpe) = self
-                    .options
-                    .default_scope
-                    .entries
-                    .get(self.arena.strings.get(id))
-                    .copied()
-                {
+                if let Some(tpe) = self.options.default_scope.get(id) {
                     tpe
-                } else if let Some(tpe) =
-                    self.scope.entries.get(self.arena.strings.get(id)).copied()
-                {
+                } else if let Some(tpe) = self.scope.get(id) {
                     tpe
                 } else {
                     Type::Unspecified
@@ -1503,13 +1461,7 @@ impl<'a> Analysis<'a> {
                     Type::Unspecified
                 }
             }
-            Value::App(app) => self
-                .options
-                .default_scope
-                .entries
-                .get(self.arena.strings.get(app.func))
-                .copied()
-                .unwrap_or_default(),
+            Value::App(app) => self.options.default_scope.get(app.func).unwrap_or_default(),
             Value::Binary(binary) => match binary.operator {
                 Operator::Add | Operator::Sub | Operator::Mul | Operator::Div => Type::Number,
                 Operator::As => {

@@ -82,8 +82,8 @@ impl<'a> Parser<'a> {
     fn parse_source_kind(&mut self) -> ParseResult<SourceKind<Raw>> {
         let token = self.shift();
         match token.sym {
-            Sym::Id(id) => Ok(SourceKind::Name(id.to_owned())),
-            Sym::String(sub) => Ok(SourceKind::Subject(sub.to_owned())),
+            Sym::Id(id) => Ok(SourceKind::Name(self.arena.strings.alloc_no_case(id))),
+            Sym::String(sub) => Ok(SourceKind::Subject(self.arena.strings.alloc(sub))),
             Sym::Symbol(Symbol::OpenParen) => {
                 let query = self.parse_query()?;
                 expect_symbol(self.shift(), Symbol::CloseParen)?;
@@ -103,8 +103,10 @@ impl<'a> Parser<'a> {
 
         let token = self.shift();
         let binding = if let Sym::Id(name) = token.sym {
+            let name = self.arena.strings.alloc_no_case(name);
+
             Binding {
-                name: name.to_owned(),
+                name,
                 pos: token.into(),
             }
         } else {
@@ -264,13 +266,13 @@ impl<'a> Parser<'a> {
                     let args = self.arena.exprs.alloc_vec(args);
 
                     Value::App(App {
-                        func: self.arena.strings.alloc(name),
+                        func: self.arena.strings.alloc_no_case(name),
                         args,
                     })
                 } else if matches!(self.peek().sym, Sym::Symbol(Symbol::Dot)) {
                     self.shift();
                     let attrs = token.into();
-                    let name = self.arena.strings.alloc(name);
+                    let name = self.arena.strings.alloc_no_case(name);
                     let mut access = Access {
                         target: self.arena.exprs.alloc(attrs, Value::Id(name)),
                         field: self.parse_ident()?,
@@ -286,7 +288,7 @@ impl<'a> Parser<'a> {
 
                     Value::Access(access)
                 } else {
-                    Value::Id(self.arena.strings.alloc(name))
+                    Value::Id(self.arena.strings.alloc_no_case(name))
                 }
             }
 
