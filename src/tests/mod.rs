@@ -1,8 +1,8 @@
 use crate::arena::Arena;
-use crate::ast::{Binding, Limit, Order, Query};
+use crate::ast::{Limit, Order, Query};
 use crate::prelude::{Type, Typed};
 use crate::token::Operator;
-use crate::{Attrs, ExprRef, Raw, SourceKind, Value};
+use crate::{Attrs, ExprRef, Pos, Raw, SourceKind, Value};
 use ordered_float::OrderedFloat;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -86,8 +86,14 @@ pub struct QueryView<A> {
 
 #[derive(Debug, Serialize)]
 pub struct SourceView<A> {
-    pub binding: Binding,
+    pub binding: BindingView,
     pub kind: SourceKindView<A>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BindingView {
+    pub name: String,
+    pub pos: Pos,
 }
 
 #[derive(Debug, Serialize)]
@@ -184,7 +190,10 @@ impl<A> Query<A> {
                 .sources
                 .into_iter()
                 .map(|s| SourceView {
-                    binding: s.binding.clone(),
+                    binding: BindingView {
+                        name: arena.strings.get(s.binding.name).to_owned(),
+                        pos: s.binding.pos,
+                    },
                     kind: match s.kind {
                         SourceKind::Name(name) => {
                             SourceKindView::Name(arena.strings.get(name).to_owned())

@@ -16,7 +16,7 @@ mod typing;
 use crate::arena::Arena;
 use crate::lexer::tokenize;
 use crate::prelude::{
-    Analysis, AnalysisOptions, FunArgs, Type, Typed, display_type, name_to_type, parse,
+    display_type, name_to_type, parse, Analysis, AnalysisOptions, FunArgs, Type, Typed,
 };
 use crate::token::Token;
 pub use ast::*;
@@ -345,64 +345,64 @@ impl SessionBuilder {
     /// `declare_func` and `declare_agg_func` for all standard library functions,
     /// and `declare_event_type` for the default event structure.
     pub fn use_stdlib(self) -> Self {
-        self.declare_func("ABS", &[Type::Number], Type::Number)
-            .declare_func("CEIL", &[Type::Number], Type::Number)
-            .declare_func("FLOOR", &[Type::Number], Type::Number)
-            .declare_func("ROUND", &[Type::Number], Type::Number)
-            .declare_func("COS", &[Type::Number], Type::Number)
-            .declare_func("EXP", &[Type::Number], Type::Number)
-            .declare_func("POW", &[Type::Number, Type::Number], Type::Number)
-            .declare_func("SQRT", &[Type::Number], Type::Number)
-            .declare_func("RAND", &[], Type::Number)
-            .declare_func("PI", &[Type::Number], Type::Number)
-            .declare_func("LOWER", &[Type::String], Type::String)
-            .declare_func("UPPER", &[Type::String], Type::String)
-            .declare_func("TRIM", &[Type::String], Type::String)
-            .declare_func("LTRIM", &[Type::String], Type::String)
-            .declare_func("RTRIM", &[Type::String], Type::String)
-            .declare_func("LEN", &[Type::String], Type::Number)
-            .declare_func("INSTR", &[Type::String], Type::Number)
+        self.declare_func("abs", &[Type::Number], Type::Number)
+            .declare_func("ceil", &[Type::Number], Type::Number)
+            .declare_func("floor", &[Type::Number], Type::Number)
+            .declare_func("round", &[Type::Number], Type::Number)
+            .declare_func("cos", &[Type::Number], Type::Number)
+            .declare_func("exp", &[Type::Number], Type::Number)
+            .declare_func("pow", &[Type::Number, Type::Number], Type::Number)
+            .declare_func("sqrt", &[Type::Number], Type::Number)
+            .declare_func("rand", &[], Type::Number)
+            .declare_func("pi", &[Type::Number], Type::Number)
+            .declare_func("lower", &[Type::String], Type::String)
+            .declare_func("upper", &[Type::String], Type::String)
+            .declare_func("trim", &[Type::String], Type::String)
+            .declare_func("ltrim", &[Type::String], Type::String)
+            .declare_func("rtrim", &[Type::String], Type::String)
+            .declare_func("len", &[Type::String], Type::Number)
+            .declare_func("instr", &[Type::String], Type::Number)
             .declare_func(
-                "SUBSTRING",
+                "substring",
                 &[Type::String, Type::Number, Type::Number],
                 Type::String,
             )
             .declare_func(
-                "REPLACE",
+                "replace",
                 &[Type::String, Type::String, Type::String],
                 Type::String,
             )
-            .declare_func("STARTSWITH", &[Type::String, Type::String], Type::Bool)
-            .declare_func("ENDSWITH", &[Type::String, Type::String], Type::Bool)
-            .declare_func("NOW", &[], Type::DateTime)
-            .declare_func("YEAR", &[Type::Date], Type::Number)
-            .declare_func("MONTH", &[Type::Date], Type::Number)
-            .declare_func("DAY", &[Type::Date], Type::Number)
-            .declare_func("HOUR", &[Type::Time], Type::Number)
-            .declare_func("MINUTE", &[Type::Time], Type::Number)
-            .declare_func("SECOND", &[Type::Time], Type::Number)
-            .declare_func("WEEKDAY", &[Type::Date], Type::Number)
+            .declare_func("startswith", &[Type::String, Type::String], Type::Bool)
+            .declare_func("endswith", &[Type::String, Type::String], Type::Bool)
+            .declare_func("now", &[], Type::DateTime)
+            .declare_func("year", &[Type::Date], Type::Number)
+            .declare_func("month", &[Type::Date], Type::Number)
+            .declare_func("day", &[Type::Date], Type::Number)
+            .declare_func("hour", &[Type::Time], Type::Number)
+            .declare_func("minute", &[Type::Time], Type::Number)
+            .declare_func("second", &[Type::Time], Type::Number)
+            .declare_func("weekday", &[Type::Date], Type::Number)
             .declare_func(
                 "IF",
                 &[Type::Bool, Type::Unspecified, Type::Unspecified],
                 Type::Unspecified,
             )
             .declare_agg_func(
-                "COUNT",
+                "count",
                 FunArgsBuilder {
                     args: &[Type::Bool],
                     required: 0,
                 },
                 Type::Number,
             )
-            .declare_agg_func("SUM", &[Type::Number], Type::Number)
-            .declare_agg_func("AVG", &[Type::Number], Type::Number)
-            .declare_agg_func("MIN", &[Type::Number], Type::Number)
-            .declare_agg_func("MAX", &[Type::Number], Type::Number)
-            .declare_agg_func("MEDIAN", &[Type::Number], Type::Number)
-            .declare_agg_func("STDDEV", &[Type::Number], Type::Number)
-            .declare_agg_func("VARIANCE", &[Type::Number], Type::Number)
-            .declare_agg_func("UNIQUE", &[Type::Unspecified], Type::Unspecified)
+            .declare_agg_func("sum", &[Type::Number], Type::Number)
+            .declare_agg_func("avg", &[Type::Number], Type::Number)
+            .declare_agg_func("min", &[Type::Number], Type::Number)
+            .declare_agg_func("max", &[Type::Number], Type::Number)
+            .declare_agg_func("median", &[Type::Number], Type::Number)
+            .declare_agg_func("stddev", &[Type::Number], Type::Number)
+            .declare_agg_func("variance", &[Type::Number], Type::Number)
+            .declare_agg_func("unique", &[Type::Unspecified], Type::Unspecified)
             .declare_event_type()
             .record()
             .prop("specversion", Type::String)

@@ -266,13 +266,13 @@ impl<'a> Parser<'a> {
                     let args = self.arena.exprs.alloc_vec(args);
 
                     Value::App(App {
-                        func: self.arena.strings.alloc(name),
+                        func: self.arena.strings.alloc_no_case(name),
                         args,
                     })
                 } else if matches!(self.peek().sym, Sym::Symbol(Symbol::Dot)) {
                     self.shift();
                     let attrs = token.into();
-                    let name = self.arena.strings.alloc(name);
+                    let name = self.arena.strings.alloc_no_case(name);
                     let mut access = Access {
                         target: self.arena.exprs.alloc(attrs, Value::Id(name)),
                         field: self.parse_ident()?,
@@ -288,7 +288,7 @@ impl<'a> Parser<'a> {
 
                     Value::Access(access)
                 } else {
-                    Value::Id(self.arena.strings.alloc(name))
+                    Value::Id(self.arena.strings.alloc_no_case(name))
                 }
             }
 
