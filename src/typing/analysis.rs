@@ -86,6 +86,7 @@ impl AnalysisOptions {
         self
     }
 
+    /// Creates empty analysis options with no functions, no event type, and no custom types.
     pub fn empty() -> Self {
         Self {
             default_scope: Scope::default(),

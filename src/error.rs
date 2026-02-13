@@ -59,6 +59,9 @@ pub enum ParserError {
     #[error("{0}:{1}: expected identifier but got {2}")]
     ExpectedIdent(u32, u32, String),
 
+    /// The query is missing a required FROM statement.
+    ///
+    /// Fields: `(line, column)`
     #[error("{0}:{1}: missing FROM statement")]
     MissingFromStatement(u32, u32),
 

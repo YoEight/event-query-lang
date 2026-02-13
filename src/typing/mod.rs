@@ -3,12 +3,15 @@ use serde::Serialize;
 
 pub mod analysis;
 
+/// A reference to a type stored in the [`TypeArena`](crate::arena::TypeArena).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct TypeRef(pub(crate) usize);
 
+/// A reference to a record definition stored in the [`TypeArena`](crate::arena::TypeArena).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct Record(pub(crate) usize);
 
+/// A reference to a function argument type list stored in the [`TypeArena`](crate::arena::TypeArena).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct ArgsRef(pub(crate) usize);
 /// Represents function argument types with optional parameter support.
@@ -72,7 +75,7 @@ pub enum Type {
     DateTime,
     /// Custom type not defined in the EventQL reference
     ///
-    /// Used when a field is converted to a custom type registered in [`AnalysisOptions::custom_types`].
+    /// Used when a field is converted to a custom type registered in the analysis options.
     /// The string contains the custom type name as it appears in the query.
     ///
     /// # Examples
@@ -90,6 +93,7 @@ pub enum Type {
 }
 
 impl Type {
+    /// Returns the inner [`Record`] reference, panicking if this is not a `Type::Record`.
     pub fn as_record_or_panic(&self) -> Record {
         if let Self::Record(r) = self {
             return *r;

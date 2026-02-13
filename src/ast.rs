@@ -70,12 +70,15 @@ impl<'a> From<Token<'a>> for Attrs {
     }
 }
 
+/// A reference to a string stored in the [`StringArena`](crate::arena::StringArena).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct StrRef(pub(crate) usize);
 
+/// A reference to a vector of expressions stored in the [`ExprArena`](crate::arena::ExprArena).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct VecRef(pub(crate) usize);
 
+/// A reference to a vector of record fields stored in the [`ExprArena`](crate::arena::ExprArena).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct RecRef(pub(crate) usize);
 
@@ -87,7 +90,7 @@ pub struct ExprPtr(pub(crate) usize);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct ExprKey(pub(crate) u64);
 
-/// A reference to an expression stored in an [`ExprArena`].
+/// A reference to an expression stored in an [`ExprArena`](crate::arena::ExprArena).
 ///
 /// This is a lightweight handle that combines a hash key for fast comparison
 /// and a pointer for fast lookup.

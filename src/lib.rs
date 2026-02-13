@@ -36,12 +36,17 @@ pub mod prelude {
     pub use super::typing::*;
 }
 
+/// Builder for function argument specifications.
+///
+/// Allows defining function signatures with both required and optional parameters.
+/// When `required` equals the length of `args`, all parameters are required.
 pub struct FunArgsBuilder<'a> {
     args: &'a [Type],
     required: usize,
 }
 
 impl<'a> FunArgsBuilder<'a> {
+    /// Creates a new `FunArgsBuilder` with the given argument types and required count.
     pub fn new(args: &'a [Type], required: usize) -> Self {
         Self { args, required }
     }
@@ -65,11 +70,16 @@ impl<'a, const N: usize> From<&'a [Type; N]> for FunArgsBuilder<'a> {
     }
 }
 
+/// Builder for configuring event type information on a [`SessionBuilder`].
+///
+/// Obtained by calling [`SessionBuilder::declare_event_type`]. Use [`record`](EventTypeBuilder::record)
+/// to define a record-shaped event type or [`custom`](EventTypeBuilder::custom) for a named custom type.
 pub struct EventTypeBuilder {
     parent: SessionBuilder,
 }
 
 impl EventTypeBuilder {
+    /// Starts building a record-shaped event type with named fields.
     pub fn record(self) -> EventTypeRecordBuilder {
         EventTypeRecordBuilder {
             inner: self,
@@ -77,17 +87,23 @@ impl EventTypeBuilder {
         }
     }
 
+    /// Declares a custom (non-record) event type by name.
     pub fn custom(self, _name: &str) -> SessionBuilder {
         todo!("deal with custom type later")
     }
 }
 
+/// Builder for defining the fields of a record-shaped event type.
+///
+/// Obtained by calling [`EventTypeBuilder::record`]. Add fields with [`prop`](EventTypeRecordBuilder::prop)
+/// and finalize with [`build`](EventTypeRecordBuilder::build) to return to the [`SessionBuilder`].
 pub struct EventTypeRecordBuilder {
     inner: EventTypeBuilder,
     props: FxHashMap<StrRef, Type>,
 }
 
 impl EventTypeRecordBuilder {
+    /// Conditionally adds a field to the event record type.
     pub fn prop_when(mut self, test: bool, name: &str, tpe: Type) -> Self {
         if test {
             self.props
@@ -97,12 +113,14 @@ impl EventTypeRecordBuilder {
         self
     }
 
+    /// Adds a field with the given name and type to the event record type.
     pub fn prop(mut self, name: &str, tpe: Type) -> Self {
         self.props
             .insert(self.inner.parent.arena.strings.alloc(name), tpe);
         self
     }
 
+    /// Conditionally adds a field with a custom type to the event record type.
     pub fn prop_with_custom_when(mut self, test: bool, name: &str, tpe: &str) -> Self {
         if test {
             let tpe = self.inner.parent.arena.strings.alloc(tpe);
@@ -115,6 +133,7 @@ impl EventTypeRecordBuilder {
         self
     }
 
+    /// Finalizes the event record type and returns the [`SessionBuilder`].
     pub fn build(mut self) -> SessionBuilder {
         let ptr = self.inner.parent.arena.types.alloc_record(self.props);
         self.inner.parent.options.event_type_info = Type::Record(ptr);
@@ -122,6 +141,7 @@ impl EventTypeRecordBuilder {
     }
 }
 
+/// A specialized `Result` type for EventQL parser operations.
 pub type Result<A> = std::result::Result<A, error::Error>;
 
 /// `SessionBuilder` is a builder for `Session` objects.
@@ -540,6 +560,10 @@ impl Session {
         display_type(&self.arena, *tpe)
     }
 
+    /// Creates an [`Analysis`] instance for fine-grained control over static analysis.
+    ///
+    /// Use this when you need to analyze individual expressions or manage scopes manually,
+    /// rather than using [`run_static_analysis`](Session::run_static_analysis) for whole queries.
     pub fn analysis(&mut self) -> Analysis<'_> {
         Analysis::new(&mut self.arena, &self.options)
     }
