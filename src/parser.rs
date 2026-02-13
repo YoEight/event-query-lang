@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
         let token = self.shift();
 
         if let Sym::Id(id) = token.sym {
-            return Ok(self.arena.alloc_str(id));
+            return Ok(self.arena.strings.alloc(id));
         }
 
         Err(ParserError::ExpectedIdent(
@@ -264,13 +264,13 @@ impl<'a> Parser<'a> {
                     let args = self.arena.exprs.alloc_vec(args);
 
                     Value::App(App {
-                        func: self.arena.alloc_str(name),
+                        func: self.arena.strings.alloc(name),
                         args,
                     })
                 } else if matches!(self.peek().sym, Sym::Symbol(Symbol::Dot)) {
                     self.shift();
                     let attrs = token.into();
-                    let name = self.arena.alloc_str(name);
+                    let name = self.arena.strings.alloc(name);
                     let mut access = Access {
                         target: self.arena.exprs.alloc(attrs, Value::Id(name)),
                         field: self.parse_ident()?,
@@ -286,11 +286,11 @@ impl<'a> Parser<'a> {
 
                     Value::Access(access)
                 } else {
-                    Value::Id(self.arena.alloc_str(name))
+                    Value::Id(self.arena.strings.alloc(name))
                 }
             }
 
-            Sym::String(s) => Value::String(self.arena.alloc_str(s)),
+            Sym::String(s) => Value::String(self.arena.strings.alloc(s)),
             Sym::Number(n) => Value::Number(n.into()),
 
             Sym::Symbol(Symbol::OpenParen) => {

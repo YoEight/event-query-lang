@@ -91,7 +91,7 @@ impl EventTypeRecordBuilder {
     pub fn prop_when(mut self, test: bool, name: &str, tpe: Type) -> Self {
         if test {
             self.props
-                .insert(self.inner.parent.arena.alloc_str(name), tpe);
+                .insert(self.inner.parent.arena.strings.alloc(name), tpe);
         }
 
         self
@@ -99,15 +99,17 @@ impl EventTypeRecordBuilder {
 
     pub fn prop(mut self, name: &str, tpe: Type) -> Self {
         self.props
-            .insert(self.inner.parent.arena.alloc_str(name), tpe);
+            .insert(self.inner.parent.arena.strings.alloc(name), tpe);
         self
     }
 
     pub fn prop_with_custom_when(mut self, test: bool, name: &str, tpe: &str) -> Self {
         if test {
-            let tpe = self.inner.parent.arena.alloc_str(tpe);
-            self.props
-                .insert(self.inner.parent.arena.alloc_str(name), Type::Custom(tpe));
+            let tpe = self.inner.parent.arena.strings.alloc(tpe);
+            self.props.insert(
+                self.inner.parent.arena.strings.alloc(name),
+                Type::Custom(tpe),
+            );
         }
 
         self
@@ -525,7 +527,7 @@ impl Session {
     /// - `"time"` → [`Type::Time`]
     /// - `"datetime"` → [`Type::DateTime`]
     pub fn get_type_from_name(&mut self, name: &str) -> Option<Type> {
-        let str_ref = self.arena.alloc_str(name);
+        let str_ref = self.arena.strings.alloc(name);
         name_to_type(&self.arena, &self.options, str_ref)
     }
 
@@ -535,7 +537,7 @@ impl Session {
     /// a function with signature `(boolean, number?) -> string` accepts 1 or 2 arguments.
     /// Aggregate functions use `=>` instead of `->` in their signature.
     pub fn display_type(&self, tpe: &Type) -> String {
-        display_type(&self.arena, tpe)
+        display_type(&self.arena, *tpe)
     }
 
     pub fn analysis(&mut self) -> Analysis<'_> {

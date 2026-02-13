@@ -1,14 +1,14 @@
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use rustc_hash::FxHashMap;
-use serde::{ser::SerializeMap, Serialize};
+use serde::{Serialize, ser::SerializeMap};
 use std::{borrow::Cow, collections::HashSet, mem};
 use unicase::Ascii;
 
 use crate::arena::Arena;
 use crate::typing::{Record, Type};
 use crate::{
-    error::AnalysisError, token::Operator, App, Attrs, Binary, ExprRef, Field, Query, Raw, RecRef, Source, SourceKind,
-    StrRef, Value,
+    App, Attrs, Binary, ExprRef, Field, Query, Raw, RecRef, Source, SourceKind, StrRef, Value,
+    error::AnalysisError, token::Operator,
 };
 
 /// Represents the state of a query that has been statically analyzed.
@@ -409,13 +409,13 @@ impl<'a> Analysis<'a> {
             )),
 
             Value::Id(id) => {
-                if let Some(tpe) = self.scope.entries.get(self.arena.get_str(&id)).cloned() {
+                if let Some(tpe) = self.scope.entries.get(self.arena.strings.get(id)).cloned() {
                     Ok(tpe)
                 } else {
                     Err(AnalysisError::VariableUndeclared(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
-                        self.arena.get_str(&id).to_owned(),
+                        self.arena.strings.get(id).to_owned(),
                     ))
                 }
             }
@@ -431,11 +431,15 @@ impl<'a> Analysis<'a> {
                 loop {
                     match current.value {
                         Value::Id(name) => {
-                            if !self.scope.entries.contains_key(self.arena.get_str(&name)) {
+                            if !self
+                                .scope
+                                .entries
+                                .contains_key(self.arena.strings.get(name))
+                            {
                                 return Err(AnalysisError::VariableUndeclared(
                                     current.attrs.pos.line,
                                     current.attrs.pos.col,
-                                    self.arena.get_str(&name).to_owned(),
+                                    self.arena.strings.get(name).to_owned(),
                                 ));
                             }
 
@@ -494,7 +498,7 @@ impl<'a> Analysis<'a> {
             Value::Number(_) | Value::String(_) | Value::Bool(_) => Ok(()),
 
             Value::Id(id) => {
-                if self.scope.entries.contains_key(self.arena.get_str(&id)) {
+                if self.scope.entries.contains_key(self.arena.strings.get(id)) {
                     if ctx.use_agg_func {
                         return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
                             node.attrs.pos.line,
@@ -509,7 +513,7 @@ impl<'a> Analysis<'a> {
             }
 
             Value::Array(exprs) => {
-                for idx in 0..self.arena.exprs.vec(exprs).len() {
+                for idx in self.arena.exprs.vec_idxes(exprs) {
                     let expr = self.arena.exprs.vec_get(exprs, idx);
 
                     self.check_projection_on_field_expr(ctx, expr)?;
@@ -535,7 +539,7 @@ impl<'a> Analysis<'a> {
                     .options
                     .default_scope
                     .entries
-                    .get(self.arena.get_str(&app.func))
+                    .get(self.arena.strings.get(app.func))
                 {
                     ctx.use_agg_func |= *aggregate;
 
@@ -579,7 +583,7 @@ impl<'a> Analysis<'a> {
                 .options
                 .default_scope
                 .entries
-                .get(self.arena.get_str(&app.func))
+                .get(self.arena.strings.get(app.func))
         {
             for idx in 0..self.arena.exprs.vec(app.args).len() {
                 let arg = self.arena.exprs.vec_get(app.args, idx);
@@ -601,7 +605,7 @@ impl<'a> Analysis<'a> {
         let node = self.arena.exprs.get(expr);
         match node.value {
             Value::Id(id) => {
-                if self.scope.entries.contains_key(self.arena.get_str(&id)) {
+                if self.scope.entries.contains_key(self.arena.strings.get(id)) {
                     return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
@@ -642,7 +646,7 @@ impl<'a> Analysis<'a> {
                     .options
                     .default_scope
                     .entries
-                    .contains_key(self.arena.get_str(&id)) =>
+                    .contains_key(self.arena.strings.get(id)) =>
             {
                 Ok(())
             }
@@ -681,7 +685,7 @@ impl<'a> Analysis<'a> {
                 .options
                 .default_scope
                 .entries
-                .contains_key(self.arena.get_str(&id)),
+                .contains_key(self.arena.strings.get(id)),
             Value::Array(exprs) => {
                 if self.arena.exprs.vec(exprs).is_empty() {
                     return false;
@@ -761,13 +765,13 @@ impl<'a> Analysis<'a> {
                     .options
                     .default_scope
                     .entries
-                    .get(self.arena.get_str(&app.func))
+                    .get(self.arena.strings.get(app.func))
                     && *aggregate
                 {
                     return Err(AnalysisError::WrongAggFunUsage(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
-                        self.arena.get_str(&app.func).to_owned(),
+                        self.arena.strings.get(app.func).to_owned(),
                     ));
                 }
 
@@ -819,7 +823,7 @@ impl<'a> Analysis<'a> {
     fn reject_constant_expr(&self, expr: ExprRef) -> AnalysisResult<()> {
         let node = self.arena.exprs.get(expr);
         match node.value {
-            Value::Id(id) if self.scope.entries.contains_key(self.arena.get_str(&id)) => Ok(()),
+            Value::Id(id) if self.scope.entries.contains_key(self.arena.strings.get(id)) => Ok(()),
 
             Value::Array(exprs) => {
                 let mut errored = None;
@@ -921,11 +925,11 @@ impl<'a> Analysis<'a> {
                     .options
                     .default_scope
                     .entries
-                    .get(self.arena.get_str(&id))
+                    .get(self.arena.strings.get(id))
                     .copied()
                 {
                     self.arena.type_check(node.attrs, expect, tpe)
-                } else if let Some(tpe) = self.scope.entries.get_mut(self.arena.get_str(&id)) {
+                } else if let Some(tpe) = self.scope.entries.get_mut(self.arena.strings.get(id)) {
                     *tpe = self.arena.type_check(node.attrs, mem::take(tpe), expect)?;
 
                     Ok(*tpe)
@@ -933,7 +937,7 @@ impl<'a> Analysis<'a> {
                     Err(AnalysisError::VariableUndeclared(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
-                        self.arena.get_str(&id).to_owned(),
+                        self.arena.strings.get(id).to_owned(),
                     ))
                 }
             }
@@ -1004,7 +1008,7 @@ impl<'a> Analysis<'a> {
                         return Err(AnalysisError::FieldUndeclared(
                             field.attrs.pos.line,
                             field.attrs.pos.col,
-                            self.arena.get_str(&field.name).to_owned(),
+                            self.arena.strings.get(field.name).to_owned(),
                         ));
                     }
 
@@ -1028,7 +1032,7 @@ impl<'a> Analysis<'a> {
                     .options
                     .default_scope
                     .entries
-                    .get(self.arena.get_str(&app.func))
+                    .get(self.arena.strings.get(app.func))
                     .copied()
                     && let Type::App {
                         args,
@@ -1043,7 +1047,7 @@ impl<'a> Analysis<'a> {
                         return Err(AnalysisError::FunWrongArgumentCount(
                             node.attrs.pos.line,
                             node.attrs.pos.col,
-                            self.arena.get_str(&app.func).to_owned(),
+                            self.arena.strings.get(app.func).to_owned(),
                         ));
                     }
 
@@ -1051,7 +1055,7 @@ impl<'a> Analysis<'a> {
                         return Err(AnalysisError::WrongAggFunUsage(
                             node.attrs.pos.line,
                             node.attrs.pos.col,
-                            self.arena.get_str(&app.func).to_owned(),
+                            self.arena.strings.get(app.func).to_owned(),
                         ));
                     }
 
@@ -1078,7 +1082,7 @@ impl<'a> Analysis<'a> {
                     Err(AnalysisError::FuncUndeclared(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
-                        self.arena.get_str(&app.func).to_owned(),
+                        self.arena.strings.get(app.func).to_owned(),
                     ))
                 }
             }
@@ -1155,7 +1159,7 @@ impl<'a> Analysis<'a> {
                             Err(AnalysisError::UnsupportedCustomType(
                                 rhs.attrs.pos.line,
                                 rhs.attrs.pos.col,
-                                self.arena.get_str(&name).to_owned(),
+                                self.arena.strings.get(name).to_owned(),
                             ))
                         };
                     }
@@ -1229,7 +1233,12 @@ impl<'a> Analysis<'a> {
             let node = arena.exprs.get(expr);
             match node.value {
                 Value::Id(id) => {
-                    if let Some(tpe) = sys.default_scope.entries.get(arena.get_str(&id)).copied() {
+                    if let Some(tpe) = sys
+                        .default_scope
+                        .entries
+                        .get(arena.strings.get(id))
+                        .copied()
+                    {
                         if matches!(tpe, Type::Record(_)) {
                             Ok(State::new(Def::System(tpe)))
                         } else {
@@ -1239,12 +1248,12 @@ impl<'a> Analysis<'a> {
                                 display_type(arena, tpe),
                             ))
                         }
-                    } else if let Some(tpe) = scope.entries.get(arena.get_str(&id)).copied() {
+                    } else if let Some(tpe) = scope.entries.get(arena.strings.get(id)).copied() {
                         if matches!(tpe, Type::Unspecified) {
                             let record = arena.types.instantiate_record();
                             scope
                                 .entries
-                                .insert(arena.get_str(&id), Type::Record(record));
+                                .insert(arena.strings.get(id), Type::Record(record));
                             Ok(State::new(Def::User {
                                 parent: Parent {
                                     record,
@@ -1271,7 +1280,7 @@ impl<'a> Analysis<'a> {
                         Err(AnalysisError::VariableUndeclared(
                             node.attrs.pos.line,
                             node.attrs.pos.col,
-                            arena.get_str(&id).to_owned(),
+                            arena.strings.get(id).to_owned(),
                         ))
                     }
                 }
@@ -1279,7 +1288,8 @@ impl<'a> Analysis<'a> {
                     let mut state = go(scope, arena, sys, access.target)?;
 
                     // TODO - we should consider make that field and depth configurable.
-                    let is_data_field = state.depth == 0 && arena.get_str(&access.field) == "data";
+                    let is_data_field =
+                        state.depth == 0 && arena.strings.get(access.field) == "data";
 
                     // TODO - we should consider make that behavior configurable.
                     // the `data` property is where the JSON payload is located, which means
@@ -1355,7 +1365,7 @@ impl<'a> Analysis<'a> {
                                     Err(AnalysisError::FieldUndeclared(
                                         node.attrs.pos.line,
                                         node.attrs.pos.col,
-                                        arena.get_str(&access.field).to_owned(),
+                                        arena.strings.get(access.field).to_owned(),
                                     ))
                                 };
                             }
@@ -1388,7 +1398,7 @@ impl<'a> Analysis<'a> {
                                 return Err(AnalysisError::FieldUndeclared(
                                     node.attrs.pos.line,
                                     node.attrs.pos.col,
-                                    arena.get_str(&access.field).to_owned(),
+                                    arena.strings.get(access.field).to_owned(),
                                 ));
                             }
 
@@ -1443,11 +1453,13 @@ impl<'a> Analysis<'a> {
                     .options
                     .default_scope
                     .entries
-                    .get(self.arena.get_str(&id))
+                    .get(self.arena.strings.get(id))
                     .copied()
                 {
                     tpe
-                } else if let Some(tpe) = self.scope.entries.get(self.arena.get_str(&id)).copied() {
+                } else if let Some(tpe) =
+                    self.scope.entries.get(self.arena.strings.get(id)).copied()
+                {
                     tpe
                 } else {
                     Type::Unspecified
@@ -1494,8 +1506,8 @@ impl<'a> Analysis<'a> {
                 .options
                 .default_scope
                 .entries
-                .get(self.arena.get_str(&app.func))
-                .cloned()
+                .get(self.arena.strings.get(app.func))
+                .copied()
                 .unwrap_or_default(),
             Value::Binary(binary) => match binary.operator {
                 Operator::Add | Operator::Sub | Operator::Mul | Operator::Div => Type::Number,
@@ -1571,7 +1583,7 @@ impl Arena {
             (Type::Date, Type::DateTime) => Ok(Type::Date),
             (Type::DateTime, Type::Time) => Ok(Type::Time),
             (Type::Time, Type::DateTime) => Ok(Type::Time),
-            (Type::Custom(a), Type::Custom(b)) if self.eq_ignore_ascii_case(a, b) => {
+            (Type::Custom(a), Type::Custom(b)) if self.strings.eq_ignore_ascii_case(a, b) => {
                 Ok(Type::Custom(a))
             }
             (Type::Array(a), Type::Array(b)) => {
@@ -1684,7 +1696,7 @@ pub(crate) fn name_to_type(
     opts: &AnalysisOptions,
     name_ref: StrRef,
 ) -> Option<Type> {
-    let name = arena.get_str(&name_ref);
+    let name = arena.strings.get(name_ref);
 
     if name.eq_ignore_ascii_case("string") {
         Some(Type::String)
@@ -1718,7 +1730,7 @@ pub(crate) fn display_type(arena: &Arena, tpe: Type) -> String {
             Type::Date => buffer.push_str("Date"),
             Type::Time => buffer.push_str("Time"),
             Type::DateTime => buffer.push_str("DateTime"),
-            Type::Custom(n) => buffer.push_str(arena.get_str(n)),
+            Type::Custom(n) => buffer.push_str(arena.strings.get(n)),
 
             Type::Array(tpe) => {
                 buffer.push_str("[]");
@@ -1735,7 +1747,7 @@ pub(crate) fn display_type(arena: &Arena, tpe: Type) -> String {
                         buffer.push_str(", ");
                     }
 
-                    buffer.push_str(arena.get_str(name));
+                    buffer.push_str(arena.strings.get(*name));
                     buffer.push_str(": ");
 
                     go(buffer, arena, *value);
