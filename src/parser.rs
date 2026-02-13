@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
         let token = self.shift();
 
         if let Sym::Id(id) = token.sym {
-            return Ok(self.arena.strings.alloc(id));
+            return Ok(self.arena.strings.alloc_no_case(id));
         }
 
         Err(ParserError::ExpectedIdent(
@@ -82,8 +82,8 @@ impl<'a> Parser<'a> {
     fn parse_source_kind(&mut self) -> ParseResult<SourceKind<Raw>> {
         let token = self.shift();
         match token.sym {
-            Sym::Id(id) => Ok(SourceKind::Name(id.to_owned())),
-            Sym::String(sub) => Ok(SourceKind::Subject(sub.to_owned())),
+            Sym::Id(id) => Ok(SourceKind::Name(self.arena.strings.alloc_no_case(id))),
+            Sym::String(sub) => Ok(SourceKind::Subject(self.arena.strings.alloc(sub))),
             Sym::Symbol(Symbol::OpenParen) => {
                 let query = self.parse_query()?;
                 expect_symbol(self.shift(), Symbol::CloseParen)?;
@@ -103,8 +103,10 @@ impl<'a> Parser<'a> {
 
         let token = self.shift();
         let binding = if let Sym::Id(name) = token.sym {
+            let name = self.arena.strings.alloc_no_case(name);
+
             Binding {
-                name: name.to_owned(),
+                name,
                 pos: token.into(),
             }
         } else {

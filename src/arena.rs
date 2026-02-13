@@ -4,6 +4,7 @@ use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::Serialize;
 use std::collections::hash_map::Entry;
 use std::hash::BuildHasher;
+use unicase::Ascii;
 
 /// An arena-based allocator for interning strings.
 ///
@@ -21,6 +22,20 @@ impl StringArena {
     /// Interns a string and returns its [`StrRef`]. Returns the existing reference if already interned.
     pub fn alloc(&mut self, value: &str) -> StrRef {
         match self.cache.entry(self.hasher.hash_one(value)) {
+            Entry::Occupied(entry) => *entry.get(),
+            Entry::Vacant(entry) => {
+                let key = StrRef(self.slots.len());
+                entry.insert(key);
+                self.slots.push(value.to_owned());
+
+                key
+            }
+        }
+    }
+
+    pub fn alloc_no_case(&mut self, value: &str) -> StrRef {
+        let hash = Ascii::new(value);
+        match self.cache.entry(self.hasher.hash_one(hash)) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
                 let key = StrRef(self.slots.len());

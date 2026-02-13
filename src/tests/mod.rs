@@ -186,8 +186,12 @@ impl<A> Query<A> {
                 .map(|s| SourceView {
                     binding: s.binding.clone(),
                     kind: match s.kind {
-                        SourceKind::Name(name) => SourceKindView::Name(name),
-                        SourceKind::Subject(subject) => SourceKindView::Subject(subject),
+                        SourceKind::Name(name) => {
+                            SourceKindView::Name(arena.strings.get(name).to_owned())
+                        }
+                        SourceKind::Subject(subject) => {
+                            SourceKindView::Subject(arena.strings.get(subject).to_owned())
+                        }
                         SourceKind::Subquery(subquery) => {
                             SourceKindView::Subquery(Box::new(subquery.view(arena)))
                         }

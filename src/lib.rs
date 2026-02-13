@@ -195,9 +195,10 @@ impl SessionBuilder {
     ) -> Self {
         if test {
             let builder = args.into();
+            let name = self.arena.strings.alloc_no_case(name);
             let args = self.arena.types.alloc_args(builder.args);
 
-            self.options.default_scope.entries.insert(
+            self.options.default_scope.declare(
                 name,
                 Type::App {
                     args: FunArgs {
@@ -252,9 +253,10 @@ impl SessionBuilder {
     ) -> Self {
         if test {
             let builder = args.into();
+            let name = self.arena.strings.alloc_no_case(name);
             let args = self.arena.types.alloc_args(builder.args);
 
-            self.options.default_scope.entries.insert(
+            self.options.default_scope.declare(
                 name,
                 Type::App {
                     args: FunArgs {

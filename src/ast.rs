@@ -219,10 +219,10 @@ pub enum Value {
 ///
 /// # Examples
 /// in `FROM e IN events`, `e` is the binding.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct Binding {
     /// Name attached to a source of events
-    pub name: String,
+    pub name: StrRef,
     /// Position in the source code where that binding was introduced
     pub pos: Pos,
 }
@@ -254,9 +254,9 @@ pub struct Source<A> {
 #[derive(Debug, Clone, Serialize)]
 pub enum SourceKind<A> {
     /// Named source (identifier)
-    Name(String),
+    Name(StrRef),
     /// Subject pattern (string literal used as event subject pattern)
-    Subject(String),
+    Subject(StrRef),
     /// Nested subquery
     Subquery(Box<Query<A>>),
 }
