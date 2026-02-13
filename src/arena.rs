@@ -200,28 +200,28 @@ impl TypeArena {
         }
     }
 
-    pub fn get_type(&self, key: &TypeRef) -> Type {
+    pub fn get_type(&self, key: TypeRef) -> Type {
         self.types[key.0]
     }
 
-    pub fn get_record(&self, key: &Record) -> &FxHashMap<StrRef, Type> {
+    pub fn get_record(&self, key: Record) -> &FxHashMap<StrRef, Type> {
         &self.records[key.0]
     }
 
-    pub fn get_args(&self, key: &ArgsRef) -> &[Type] {
+    pub fn get_args(&self, key: ArgsRef) -> &[Type] {
         self.args[key.0].as_slice()
     }
 
-    pub fn get_args_mut(&mut self, key: &ArgsRef) -> &mut [Type] {
+    pub fn get_args_mut(&mut self, key: ArgsRef) -> &mut [Type] {
         self.args[key.0].as_mut_slice()
     }
 
     pub fn args_idxes(&self, key: ArgsRef) -> impl Iterator<Item = usize> + use<> {
-        0..self.get_args(&key).len()
+        0..self.get_args(key).len()
     }
 
     pub fn args_get(&self, key: ArgsRef, idx: usize) -> Type {
-        self.get_args(&key)[idx]
+        self.get_args(key)[idx]
     }
 
     pub fn record_get(&self, record: Record, field: StrRef) -> Option<Type> {
@@ -236,20 +236,20 @@ impl TypeArena {
         self.records[record.0].keys().copied()
     }
 
-    pub fn records_have_same_keys(&self, reca: Record, recb: Record) -> bool {
-        let reca = self.get_record(&reca);
-        let recb = self.get_record(&recb);
+    pub fn records_have_same_keys(&self, rec_a: Record, rec_b: Record) -> bool {
+        let rec_a = self.get_record(rec_a);
+        let rec_b = self.get_record(rec_b);
 
-        if reca.is_empty() && recb.is_empty() {
+        if rec_a.is_empty() && rec_b.is_empty() {
             return true;
         }
 
-        if reca.len() != recb.len() {
+        if rec_a.len() != rec_b.len() {
             return false;
         }
 
-        for bk in recb.keys() {
-            if !reca.contains_key(bk) {
+        for bk in rec_b.keys() {
+            if !rec_a.contains_key(bk) {
                 return false;
             }
         }
@@ -296,35 +296,5 @@ impl Arena {
 
     pub fn free_space(&mut self) {
         self.types.free_space();
-    }
-
-    pub fn alloc_str(&mut self, value: &str) -> StrRef {
-        self.strings.alloc(value)
-    }
-
-    pub fn eq_ignore_ascii_case(&self, ka: StrRef, kb: StrRef) -> bool {
-        self.strings
-            .get(ka)
-            .eq_ignore_ascii_case(self.strings.get(kb))
-    }
-
-    pub fn get_str(&self, key: &StrRef) -> &str {
-        self.strings.get(*key)
-    }
-
-    pub fn exprs(&self) -> &ExprArena {
-        &self.exprs
-    }
-
-    pub fn exprs_mut(&mut self) -> &mut ExprArena {
-        &mut self.exprs
-    }
-
-    pub fn types(&self) -> &TypeArena {
-        &self.types
-    }
-
-    pub fn types_mut(&mut self) -> &mut TypeArena {
-        &mut self.types
     }
 }

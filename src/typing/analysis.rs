@@ -1,14 +1,14 @@
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use rustc_hash::FxHashMap;
-use serde::{Serialize, ser::SerializeMap};
+use serde::{ser::SerializeMap, Serialize};
 use std::{borrow::Cow, collections::HashSet, mem};
 use unicase::Ascii;
 
 use crate::arena::Arena;
 use crate::typing::{Record, Type};
 use crate::{
-    App, Attrs, Binary, ExprRef, Field, Query, Raw, RecRef, Source, SourceKind, StrRef, Value,
-    error::AnalysisError, token::Operator,
+    error::AnalysisError, token::Operator, App, Attrs, Binary, ExprRef, Field, Query, Raw, RecRef, Source, SourceKind,
+    StrRef, Value,
 };
 
 /// Represents the state of a query that has been statically analyzed.
@@ -456,7 +456,7 @@ impl<'a> Analysis<'a> {
                 Err(AnalysisError::ExpectRecordOrSourcedProperty(
                     node.attrs.pos.line,
                     node.attrs.pos.col,
-                    display_type(self.arena, &tpe),
+                    display_type(self.arena, tpe),
                 ))
             }
         }
@@ -951,7 +951,7 @@ impl<'a> Analysis<'a> {
 
                 match expect {
                     Type::Array(expect) => {
-                        let mut expect = self.arena.types.get_type(&expect);
+                        let mut expect = self.arena.types.get_type(expect);
                         for idx in 0..self.arena.exprs.vec(exprs).len() {
                             let expr = self.arena.exprs.vec_get(exprs, idx);
                             expect = self.analyze_expr(ctx, expr, expect)?;
@@ -966,8 +966,8 @@ impl<'a> Analysis<'a> {
                         Err(AnalysisError::TypeMismatch(
                             node.attrs.pos.line,
                             node.attrs.pos.col,
-                            display_type(self.arena, &expect),
-                            display_type(self.arena, &tpe),
+                            display_type(self.arena, expect),
+                            display_type(self.arena, tpe),
                         ))
                     }
                 }
@@ -1016,8 +1016,8 @@ impl<'a> Analysis<'a> {
                 Err(AnalysisError::TypeMismatch(
                     node.attrs.pos.line,
                     node.attrs.pos.col,
-                    display_type(self.arena, &expect),
-                    display_type(self.arena, &tpe),
+                    display_type(self.arena, expect),
+                    display_type(self.arena, tpe),
                 ))
             }
 
@@ -1029,6 +1029,7 @@ impl<'a> Analysis<'a> {
                     .default_scope
                     .entries
                     .get(self.arena.get_str(&app.func))
+                    .copied()
                     && let Type::App {
                         args,
                         result,
@@ -1036,7 +1037,7 @@ impl<'a> Analysis<'a> {
                     } = tpe
                 {
                     let args_actual_len = self.arena.exprs.vec(app.args).len();
-                    let args_decl_len = self.arena.types.get_args(&args.values).len();
+                    let args_decl_len = self.arena.types.get_args(args.values).len();
 
                     if !(args_actual_len >= args.needed && args_actual_len <= args_decl_len) {
                         return Err(AnalysisError::FunWrongArgumentCount(
@@ -1046,7 +1047,7 @@ impl<'a> Analysis<'a> {
                         ));
                     }
 
-                    if *aggregate && !ctx.allow_agg_func {
+                    if aggregate && !ctx.allow_agg_func {
                         return Err(AnalysisError::WrongAggFunUsage(
                             node.attrs.pos.line,
                             node.attrs.pos.col,
@@ -1054,7 +1055,7 @@ impl<'a> Analysis<'a> {
                         ));
                     }
 
-                    if *aggregate && ctx.allow_agg_func {
+                    if aggregate && ctx.allow_agg_func {
                         ctx.use_agg_funcs = true;
                     }
 
@@ -1114,12 +1115,12 @@ impl<'a> Analysis<'a> {
                     let lhs_expect = self.analyze_expr(ctx, binary.lhs, new_expect)?;
 
                     let lhs_assumption = match lhs_expect {
-                        Type::Array(inner) => self.arena.types.get_type(&inner),
+                        Type::Array(inner) => self.arena.types.get_type(inner),
                         other => {
                             return Err(AnalysisError::ExpectArray(
                                 node.attrs.pos.line,
                                 node.attrs.pos.col,
-                                display_type(self.arena, &other),
+                                display_type(self.arena, other),
                             ));
                         }
                     };
@@ -1235,7 +1236,7 @@ impl<'a> Analysis<'a> {
                             Err(AnalysisError::ExpectRecord(
                                 node.attrs.pos.line,
                                 node.attrs.pos.col,
-                                display_type(arena, &tpe),
+                                display_type(arena, tpe),
                             ))
                         }
                     } else if let Some(tpe) = scope.entries.get(arena.get_str(&id)).copied() {
@@ -1263,7 +1264,7 @@ impl<'a> Analysis<'a> {
                             Err(AnalysisError::ExpectRecord(
                                 node.attrs.pos.line,
                                 node.attrs.pos.col,
-                                display_type(arena, &tpe),
+                                display_type(arena, tpe),
                             ))
                         }
                     } else {
@@ -1362,7 +1363,7 @@ impl<'a> Analysis<'a> {
                             Err(AnalysisError::ExpectRecord(
                                 node.attrs.pos.line,
                                 node.attrs.pos.col,
-                                display_type(arena, &tpe),
+                                display_type(arena, tpe),
                             ))
                         }
 
@@ -1394,7 +1395,7 @@ impl<'a> Analysis<'a> {
                             Err(AnalysisError::ExpectRecord(
                                 node.attrs.pos.line,
                                 node.attrs.pos.col,
-                                display_type(arena, &tpe),
+                                display_type(arena, tpe),
                             ))
                         }
                     }
@@ -1574,8 +1575,8 @@ impl Arena {
                 Ok(Type::Custom(a))
             }
             (Type::Array(a), Type::Array(b)) => {
-                let a = self.types.get_type(&a);
-                let b = self.types.get_type(&b);
+                let a = self.types.get_type(a);
+                let b = self.types.get_type(b);
                 let tpe = self.type_check(attrs, a, b)?;
 
                 Ok(self.types.alloc_array_of(tpe))
@@ -1610,13 +1611,13 @@ impl Arena {
                     result: b_res,
                     aggregate: b_agg,
                 },
-            ) if self.types.get_args(&a_args.values).len()
-                == self.types.get_args(&b_args.values).len()
+            ) if self.types.get_args(a_args.values).len()
+                == self.types.get_args(b_args.values).len()
                 && a_agg == b_agg =>
             {
-                if self.types.get_args(&a_args.values).is_empty() {
-                    let a = self.types.get_type(&a_res);
-                    let b = self.types.get_type(&b_res);
+                if self.types.get_args(a_args.values).is_empty() {
+                    let a = self.types.get_type(a_res);
+                    let b = self.types.get_type(b_res);
                     let new_res = self.type_check(attrs, a, b)?;
 
                     return Ok(Type::App {
@@ -1638,8 +1639,8 @@ impl Arena {
                 self.types.args[a_args.values.0] = vec_a;
                 self.types.args[b_args.values.0] = vec_b;
 
-                let res_a = self.types.get_type(&a_res);
-                let res_b = self.types.get_type(&b_res);
+                let res_a = self.types.get_type(a_res);
+                let res_b = self.types.get_type(b_res);
                 let new_tpe = self.type_check(attrs, res_a, res_b)?;
 
                 Ok(Type::App {
@@ -1652,8 +1653,8 @@ impl Arena {
             (this, other) => Err(AnalysisError::TypeMismatch(
                 attrs.pos.line,
                 attrs.pos.col,
-                display_type(self, &this),
-                display_type(self, &other),
+                display_type(self, this),
+                display_type(self, other),
             )),
         }
     }
@@ -1706,8 +1707,8 @@ pub(crate) fn name_to_type(
     }
 }
 
-pub(crate) fn display_type(arena: &Arena, tpe: &Type) -> String {
-    fn go(buffer: &mut String, arena: &Arena, tpe: &Type) {
+pub(crate) fn display_type(arena: &Arena, tpe: Type) -> String {
+    fn go(buffer: &mut String, arena: &Arena, tpe: Type) {
         match tpe {
             Type::Unspecified => buffer.push_str("Any"),
             Type::Number => buffer.push_str("Number"),
@@ -1721,7 +1722,7 @@ pub(crate) fn display_type(arena: &Arena, tpe: &Type) -> String {
 
             Type::Array(tpe) => {
                 buffer.push_str("[]");
-                go(buffer, arena, &arena.types.get_type(tpe));
+                go(buffer, arena, arena.types.get_type(tpe));
             }
 
             Type::Record(map) => {
@@ -1737,7 +1738,7 @@ pub(crate) fn display_type(arena: &Arena, tpe: &Type) -> String {
                     buffer.push_str(arena.get_str(name));
                     buffer.push_str(": ");
 
-                    go(buffer, arena, value);
+                    go(buffer, arena, *value);
                 }
 
                 buffer.push_str(" }");
@@ -1748,10 +1749,10 @@ pub(crate) fn display_type(arena: &Arena, tpe: &Type) -> String {
                 result,
                 aggregate,
             } => {
-                let fun_args = arena.types.get_args(&args.values);
+                let fun_args = arena.types.get_args(args.values);
                 buffer.push('(');
 
-                for (idx, arg) in fun_args.iter().enumerate() {
+                for (idx, arg) in fun_args.iter().copied().enumerate() {
                     if idx != 0 {
                         buffer.push_str(", ");
                     }
@@ -1765,13 +1766,13 @@ pub(crate) fn display_type(arena: &Arena, tpe: &Type) -> String {
 
                 buffer.push(')');
 
-                if *aggregate {
+                if aggregate {
                     buffer.push_str(" => ");
                 } else {
                     buffer.push_str(" -> ");
                 }
 
-                go(buffer, arena, &arena.types.get_type(result));
+                go(buffer, arena, arena.types.get_type(result));
             }
         }
     }
