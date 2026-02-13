@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
         let token = self.shift();
 
         if let Sym::Id(id) = token.sym {
-            return Ok(self.arena.strings.alloc_no_case(id));
+            return Ok(self.arena.strings.alloc(id));
         }
 
         Err(ParserError::ExpectedIdent(
