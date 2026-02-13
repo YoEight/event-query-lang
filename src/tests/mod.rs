@@ -1,9 +1,12 @@
-use crate::arena::ExprArena;
+use crate::arena::Arena;
 use crate::ast::{Binding, Limit, Order, Query};
+use crate::prelude::{Type, Typed};
 use crate::token::Operator;
-use crate::{Attrs, ExprRef, SourceKind, Value};
+use crate::{Attrs, ExprRef, Raw, SourceKind, Value};
 use ordered_float::OrderedFloat;
 use serde::Serialize;
+use std::collections::BTreeMap;
+use std::fmt::Debug;
 
 mod analysis;
 mod lexer;
@@ -107,32 +110,53 @@ pub struct OrderByView {
 }
 
 impl ExprRef {
-    pub fn view(self, arena: &ExprArena) -> ExprView {
-        let node = arena.get(self);
+    pub fn view(self, arena: &Arena) -> ExprView {
+        let node = arena.exprs.get(self);
         let value = match node.value {
-            Value::Number(n) => ValueView::Number(*n),
-            Value::String(s) => ValueView::String(s.clone()),
-            Value::Bool(b) => ValueView::Bool(*b),
-            Value::Id(id) => ValueView::Id(id.clone()),
-            Value::Array(arr) => ValueView::Array(arr.iter().map(|e| e.view(arena)).collect()),
-            Value::Record(fields) => ValueView::Record(
-                fields
-                    .iter()
-                    .map(|f| FieldView {
-                        attrs: f.attrs,
-                        name: f.name.clone(),
-                        value: f.expr.view(arena),
+            Value::Number(n) => ValueView::Number(n),
+            Value::String(s) => ValueView::String(arena.get_str(&s).to_owned()),
+            Value::Bool(b) => ValueView::Bool(b),
+            Value::Id(id) => ValueView::Id(arena.get_str(&id).to_owned()),
+            Value::Array(arr) => {
+                let mut values = Vec::with_capacity(arena.exprs.vec(arr).len());
+                for idx in arena.exprs.vec_idxes(arr) {
+                    let expr = arena.exprs.vec_get(arr, idx);
+                    values.push(expr.view(arena));
+                }
+
+                ValueView::Array(values)
+            }
+            Value::Record(fields) => {
+                let mut values = Vec::with_capacity(arena.exprs.rec(fields).len());
+
+                for idx in arena.exprs.rec_idxes(fields) {
+                    let field = arena.exprs.rec_get(fields, idx);
+                    values.push(FieldView {
+                        attrs: field.attrs,
+                        name: arena.get_str(&field.name).to_owned(),
+                        value: field.expr.view(arena),
                     })
-                    .collect(),
-            ),
+                }
+
+                ValueView::Record(values)
+            }
             Value::Access(access) => ValueView::Access(AccessView {
                 target: Box::new(access.target.view(arena)),
-                field: access.field.clone(),
+                field: arena.get_str(&access.field).to_owned(),
             }),
-            Value::App(app) => ValueView::App(AppView {
-                func: app.func.clone(),
-                args: app.args.iter().map(|e| e.view(arena)).collect(),
-            }),
+            Value::App(app) => {
+                let mut args = Vec::with_capacity(arena.exprs.vec(app.args).len());
+
+                for idx in arena.exprs.vec_idxes(app.args) {
+                    let expr = arena.exprs.vec_get(app.args, idx);
+                    args.push(expr.view(arena));
+                }
+
+                ValueView::App(AppView {
+                    func: arena.get_str(&app.func).to_owned(),
+                    args,
+                })
+            }
             Value::Binary(binary) => ValueView::Binary(BinaryView {
                 lhs: Box::new(binary.lhs.view(arena)),
                 operator: binary.operator,
@@ -150,7 +174,10 @@ impl ExprRef {
 }
 
 impl<A> Query<A> {
-    pub fn view(self, arena: &ExprArena) -> QueryView<A> {
+    pub fn view(self, arena: &Arena) -> QueryView<<A as ProjectMeta>::View>
+    where
+        A: ProjectMeta,
+    {
         QueryView {
             attrs: self.attrs,
             sources: self
@@ -178,8 +205,104 @@ impl<A> Query<A> {
             }),
             limit: self.limit,
             projection: self.projection.view(arena),
-            meta: self.meta,
+            meta: self.meta.project_meta(arena),
             distinct: self.distinct,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub enum TypeView {
+    Unspecified,
+    Number,
+    String,
+    Bool,
+    Subject,
+    Date,
+    Time,
+    DateTime,
+    Custom(String),
+    Array(Box<TypeView>),
+    Record(BTreeMap<String, TypeView>),
+    App {
+        args: Vec<TypeView>,
+        result: Box<TypeView>,
+        aggregate: bool,
+    },
+}
+
+pub trait ProjectMeta {
+    type View: Debug + Serialize;
+    fn project_meta(&self, arena: &Arena) -> Self::View;
+}
+
+impl ProjectMeta for Raw {
+    type View = Raw;
+
+    fn project_meta(&self, _arena: &Arena) -> Self::View {
+        *self
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct MetaView {
+    project: TypeView,
+    aggregate: bool,
+}
+
+impl ProjectMeta for Typed {
+    type View = MetaView;
+
+    fn project_meta(&self, arena: &Arena) -> Self::View {
+        MetaView {
+            project: project_type(arena, self.project),
+            aggregate: self.aggregate,
+        }
+    }
+}
+
+fn project_type(arena: &Arena, tpe: Type) -> TypeView {
+    match tpe {
+        Type::Unspecified => TypeView::Unspecified,
+        Type::Number => TypeView::Number,
+        Type::String => TypeView::String,
+        Type::Bool => TypeView::Bool,
+        Type::Subject => TypeView::Subject,
+        Type::Date => TypeView::Date,
+        Type::Time => TypeView::Time,
+        Type::DateTime => TypeView::DateTime,
+        Type::Custom(key) => TypeView::Custom(arena.get_str(&key).to_owned()),
+
+        Type::Array(arr) => {
+            TypeView::Array(Box::new(project_type(arena, arena.types.get_type(&arr))))
+        }
+
+        Type::Record(rec) => {
+            let mut props = BTreeMap::new();
+
+            for (key, val) in arena.types.get_record(&rec) {
+                props.insert(arena.get_str(key).to_owned(), project_type(arena, *val));
+            }
+
+            TypeView::Record(props)
+        }
+
+        Type::App {
+            args,
+            result,
+            aggregate,
+        } => {
+            let mut args_view = Vec::new();
+
+            for val in arena.types.get_args(&args.values) {
+                args_view.push(project_type(arena, *val));
+            }
+
+            TypeView::App {
+                args: args_view,
+                result: Box::new(project_type(arena, arena.types.get_type(&result))),
+                aggregate,
+            }
         }
     }
 }

@@ -1,13 +1,13 @@
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use rustc_hash::FxHashMap;
 use serde::{Serialize, ser::SerializeMap};
-use std::collections::hash_map::Entry;
 use std::{borrow::Cow, collections::HashSet, mem};
 use unicase::Ascii;
 
-use crate::arena::ExprArena;
+use crate::arena::Arena;
+use crate::typing::{Record, Type};
 use crate::{
-    App, Attrs, Binary, ExprRef, Field, FunArgs, Query, Raw, Source, SourceKind, Type, Value,
+    App, Attrs, Binary, ExprRef, Field, Query, Raw, RecRef, Source, SourceKind, StrRef, Value,
     error::AnalysisError, token::Operator,
 };
 
@@ -43,7 +43,7 @@ pub struct Typed {
 ///
 /// This is a convenience type alias for `Result<A, AnalysisError>` used throughout
 /// the static analysis module.
-pub type AnalysisResult<A> = std::result::Result<A, AnalysisError>;
+pub type AnalysisResult<A> = Result<A, AnalysisError>;
 
 /// Configuration options for static analysis.
 ///
@@ -114,379 +114,6 @@ impl AnalysisOptions {
     }
 }
 
-impl Default for AnalysisOptions {
-    fn default() -> Self {
-        Self {
-            default_scope: Scope {
-                entries: CaseInsensitiveHashMap::from_iter([
-                    (
-                        "ABS",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "CEIL",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "FLOOR",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "ROUND",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "COS",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "EXP",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "POW",
-                        Type::App {
-                            args: vec![Type::Number, Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "SQRT",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "RAND",
-                        Type::App {
-                            args: vec![].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "PI",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "LOWER",
-                        Type::App {
-                            args: vec![Type::String].into(),
-                            result: Box::new(Type::String),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "UPPER",
-                        Type::App {
-                            args: vec![Type::String].into(),
-                            result: Box::new(Type::String),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "TRIM",
-                        Type::App {
-                            args: vec![Type::String].into(),
-                            result: Box::new(Type::String),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "LTRIM",
-                        Type::App {
-                            args: vec![Type::String].into(),
-                            result: Box::new(Type::String),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "RTRIM",
-                        Type::App {
-                            args: vec![Type::String].into(),
-                            result: Box::new(Type::String),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "LEN",
-                        Type::App {
-                            args: vec![Type::String].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "INSTR",
-                        Type::App {
-                            args: vec![Type::String].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "SUBSTRING",
-                        Type::App {
-                            args: vec![Type::String, Type::Number, Type::Number].into(),
-                            result: Box::new(Type::String),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "REPLACE",
-                        Type::App {
-                            args: vec![Type::String, Type::String, Type::String].into(),
-                            result: Box::new(Type::String),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "STARTSWITH",
-                        Type::App {
-                            args: vec![Type::String, Type::String].into(),
-                            result: Box::new(Type::Bool),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "ENDSWITH",
-                        Type::App {
-                            args: vec![Type::String, Type::String].into(),
-                            result: Box::new(Type::Bool),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "NOW",
-                        Type::App {
-                            args: vec![].into(),
-                            result: Box::new(Type::DateTime),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "YEAR",
-                        Type::App {
-                            args: vec![Type::Date].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "MONTH",
-                        Type::App {
-                            args: vec![Type::Date].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "DAY",
-                        Type::App {
-                            args: vec![Type::Date].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "HOUR",
-                        Type::App {
-                            args: vec![Type::Time].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "MINUTE",
-                        Type::App {
-                            args: vec![Type::Time].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "SECOND",
-                        Type::App {
-                            args: vec![Type::Time].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "WEEKDAY",
-                        Type::App {
-                            args: vec![Type::Date].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "IF",
-                        Type::App {
-                            args: vec![Type::Bool, Type::Unspecified, Type::Unspecified].into(),
-                            result: Box::new(Type::Unspecified),
-                            aggregate: false,
-                        },
-                    ),
-                    (
-                        "COUNT",
-                        Type::App {
-                            args: FunArgs {
-                                values: vec![Type::Bool],
-                                needed: 0,
-                            },
-                            result: Box::new(Type::Number),
-                            aggregate: true,
-                        },
-                    ),
-                    (
-                        "SUM",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: true,
-                        },
-                    ),
-                    (
-                        "AVG",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: true,
-                        },
-                    ),
-                    (
-                        "MIN",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: true,
-                        },
-                    ),
-                    (
-                        "MAX",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: true,
-                        },
-                    ),
-                    (
-                        "MEDIAN",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: true,
-                        },
-                    ),
-                    (
-                        "STDDEV",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: true,
-                        },
-                    ),
-                    (
-                        "VARIANCE",
-                        Type::App {
-                            args: vec![Type::Number].into(),
-                            result: Box::new(Type::Number),
-                            aggregate: true,
-                        },
-                    ),
-                    (
-                        "UNIQUE",
-                        Type::App {
-                            args: vec![Type::Unspecified].into(),
-                            result: Box::new(Type::Unspecified),
-                            aggregate: true,
-                        },
-                    ),
-                ]),
-            },
-            event_type_info: Type::Record(FxHashMap::from_iter([
-                ("specversion".to_owned(), Type::String),
-                ("id".to_owned(), Type::String),
-                ("time".to_owned(), Type::DateTime),
-                ("source".to_owned(), Type::String),
-                ("subject".to_owned(), Type::Subject),
-                ("type".to_owned(), Type::String),
-                ("datacontenttype".to_owned(), Type::String),
-                ("data".to_owned(), Type::Unspecified),
-                ("predecessorhash".to_owned(), Type::String),
-                ("hash".to_owned(), Type::String),
-                ("traceparent".to_owned(), Type::String),
-                ("tracestate".to_owned(), Type::String),
-                ("signature".to_owned(), Type::String),
-            ])),
-            custom_types: HashSet::default(),
-        }
-    }
-}
-
-/// Performs static analysis on an EventQL query.
-///
-/// This function takes a raw (untyped) query and performs type checking and
-/// variable scoping analysis. It validates that:
-/// - All variables are properly declared
-/// - Types match expected types in expressions and operations
-/// - Field accesses are valid for their record types
-/// - Function calls have the correct argument types
-/// - Aggregate functions are only used in PROJECT INTO clauses
-/// - Aggregate functions are not mixed with source-bound fields in projections
-/// - Aggregate function arguments are source-bound fields (not constants or function results)
-/// - Record literals are non-empty in projection contexts
-///
-/// # Arguments
-///
-/// * `options` - Configuration containing type information and default scope
-/// * `query` - The raw query to analyze
-///
-/// # Returns
-///
-/// Returns a typed query on success, or an `AnalysisError` if type checking fails.
-pub(crate) fn static_analysis(
-    arena: &ExprArena,
-    options: &AnalysisOptions,
-    query: Query<Raw>,
-) -> AnalysisResult<Query<Typed>> {
-    let mut analysis = Analysis::new(arena, options);
-
-    analysis.analyze_query(query)
-}
-
 /// Represents a variable scope during static analysis.
 ///
 /// A scope tracks the variables and their types that are currently in scope
@@ -548,7 +175,7 @@ pub struct AnalysisContext {
 /// This struct maintains the analysis state including scopes and type information.
 /// It can be used to perform type checking on individual expressions or entire queries.
 pub struct Analysis<'a> {
-    arena: &'a ExprArena,
+    arena: &'a mut Arena,
     /// The analysis options containing type information for functions and event types.
     options: &'a AnalysisOptions,
     /// Stack of previous scopes for nested scope handling.
@@ -559,7 +186,7 @@ pub struct Analysis<'a> {
 
 impl<'a> Analysis<'a> {
     /// Creates a new analysis instance with the given options.
-    pub fn new(arena: &'a ExprArena, options: &'a AnalysisOptions) -> Self {
+    pub fn new(arena: &'a mut Arena, options: &'a AnalysisOptions) -> Self {
         Self {
             arena,
             options,
@@ -648,7 +275,7 @@ impl<'a> Analysis<'a> {
         }
 
         if let Some(group_by) = &query.group_by {
-            let node = self.arena.get(group_by.expr);
+            let node = self.arena.exprs.get(group_by.expr);
             if !matches!(node.value, Value::Access(_)) {
                 return Err(AnalysisError::ExpectFieldLiteral(
                     node.attrs.pos.line,
@@ -659,11 +286,12 @@ impl<'a> Analysis<'a> {
             self.analyze_expr(&mut ctx, group_by.expr, Type::Unspecified)?;
 
             if let Some(expr) = group_by.predicate.as_ref().copied() {
-                let node = self.arena.get(expr);
                 ctx.allow_agg_func = true;
                 ctx.use_agg_funcs = true;
 
                 self.analyze_expr(&mut ctx, expr, Type::Bool)?;
+
+                let node = self.arena.exprs.get(expr);
                 if !self.expect_agg_expr(expr)? {
                     return Err(AnalysisError::ExpectAggExpr(
                         node.attrs.pos.line,
@@ -680,7 +308,7 @@ impl<'a> Analysis<'a> {
 
         if let Some(order_by) = &query.order_by {
             self.analyze_expr(&mut ctx, order_by.expr, Type::Unspecified)?;
-            let node = self.arena.get(order_by.expr);
+            let node = self.arena.exprs.get(order_by.expr);
             if query.group_by.is_none() && !matches!(node.value, Value::Access(_)) {
                 return Err(AnalysisError::ExpectFieldLiteral(
                     node.attrs.pos.line,
@@ -713,7 +341,9 @@ impl<'a> Analysis<'a> {
     fn analyze_source(&mut self, source: Source<Raw>) -> AnalysisResult<Source<Typed>> {
         let kind = self.analyze_source_kind(source.kind)?;
         let tpe = match &kind {
-            SourceKind::Name(_) | SourceKind::Subject(_) => self.options.event_type_info.clone(),
+            SourceKind::Name(_) | SourceKind::Subject(_) => {
+                self.arena.types.alloc_type(self.options.event_type_info)
+            }
             SourceKind::Subquery(query) => self.projection_type(query),
         };
 
@@ -752,10 +382,10 @@ impl<'a> Analysis<'a> {
         ctx: &mut AnalysisContext,
         expr: ExprRef,
     ) -> AnalysisResult<Type> {
-        let node = self.arena.get(expr);
+        let node = self.arena.exprs.get(expr);
         match node.value {
             Value::Record(record) => {
-                if record.is_empty() {
+                if self.arena.exprs.rec(record).is_empty() {
                     return Err(AnalysisError::EmptyRecord(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
@@ -763,20 +393,20 @@ impl<'a> Analysis<'a> {
                 }
 
                 ctx.allow_agg_func = true;
-                let tpe = self.analyze_expr(ctx, node.node_ref, Type::Unspecified)?;
+                let tpe = self.analyze_expr(ctx, expr, Type::Unspecified)?;
                 let mut chk_ctx = CheckContext {
                     use_agg_func: ctx.use_agg_funcs,
                     ..Default::default()
                 };
 
-                self.check_projection_on_record(&mut chk_ctx, record.as_slice())?;
+                self.check_projection_on_record(&mut chk_ctx, record)?;
                 Ok(tpe)
             }
 
             Value::App(app) => {
                 ctx.allow_agg_func = true;
 
-                let tpe = self.analyze_expr(ctx, node.node_ref, Type::Unspecified)?;
+                let tpe = self.analyze_expr(ctx, expr, Type::Unspecified)?;
 
                 if ctx.use_agg_funcs {
                     let mut chk_ctx = CheckContext {
@@ -786,7 +416,7 @@ impl<'a> Analysis<'a> {
 
                     self.check_projection_on_field_expr(&mut chk_ctx, expr)?;
                 } else {
-                    self.reject_constant_func(node.attrs, app)?;
+                    self.reject_constant_func(node.attrs, &app)?;
                 }
 
                 Ok(tpe)
@@ -798,13 +428,13 @@ impl<'a> Analysis<'a> {
             )),
 
             Value::Id(id) => {
-                if let Some(tpe) = self.scope.entries.get(id.as_str()).cloned() {
+                if let Some(tpe) = self.scope.entries.get(self.arena.get_str(&id)).cloned() {
                     Ok(tpe)
                 } else {
                     Err(AnalysisError::VariableUndeclared(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
-                        id.clone(),
+                        self.arena.get_str(&id).to_owned(),
                     ))
                 }
             }
@@ -815,23 +445,23 @@ impl<'a> Analysis<'a> {
             )),
 
             Value::Access(access) => {
-                let mut current = self.arena.get(access.target);
+                let mut current = self.arena.exprs.get(access.target);
 
                 loop {
                     match current.value {
                         Value::Id(name) => {
-                            if !self.scope.entries.contains_key(name.as_str()) {
+                            if !self.scope.entries.contains_key(self.arena.get_str(&name)) {
                                 return Err(AnalysisError::VariableUndeclared(
                                     current.attrs.pos.line,
                                     current.attrs.pos.col,
-                                    name.clone(),
+                                    self.arena.get_str(&name).to_owned(),
                                 ));
                             }
 
                             break;
                         }
 
-                        Value::Access(next) => current = self.arena.get(next.target),
+                        Value::Access(next) => current = self.arena.exprs.get(next.target),
                         _ => unreachable!(),
                     }
                 }
@@ -839,21 +469,27 @@ impl<'a> Analysis<'a> {
                 self.analyze_expr(ctx, expr, Type::Unspecified)
             }
 
-            _ => Err(AnalysisError::ExpectRecordOrSourcedProperty(
-                node.attrs.pos.line,
-                node.attrs.pos.col,
-                self.project_type(expr),
-            )),
+            _ => {
+                let tpe = self.project_type(expr);
+
+                Err(AnalysisError::ExpectRecordOrSourcedProperty(
+                    node.attrs.pos.line,
+                    node.attrs.pos.col,
+                    display_type(self.arena, &tpe),
+                ))
+            }
         }
     }
 
     fn check_projection_on_record(
         &mut self,
         ctx: &mut CheckContext,
-        record: &[Field],
+        record: RecRef,
     ) -> AnalysisResult<()> {
-        for field in record {
-            self.check_projection_on_field(ctx, field)?;
+        for idx in 0..self.arena.exprs.rec(record).len() {
+            let field = self.arena.exprs.rec_get(record, idx);
+
+            self.check_projection_on_field(ctx, &field)?;
         }
 
         Ok(())
@@ -872,12 +508,12 @@ impl<'a> Analysis<'a> {
         ctx: &mut CheckContext,
         expr: ExprRef,
     ) -> AnalysisResult<()> {
-        let node = self.arena.get(expr);
+        let node = self.arena.exprs.get(expr);
         match node.value {
             Value::Number(_) | Value::String(_) | Value::Bool(_) => Ok(()),
 
             Value::Id(id) => {
-                if self.scope.entries.contains_key(id.as_str()) {
+                if self.scope.entries.contains_key(self.arena.get_str(&id)) {
                     if ctx.use_agg_func {
                         return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
                             node.attrs.pos.line,
@@ -892,7 +528,9 @@ impl<'a> Analysis<'a> {
             }
 
             Value::Array(exprs) => {
-                for expr in exprs.iter().copied() {
+                for idx in 0..self.arena.exprs.vec(exprs).len() {
+                    let expr = self.arena.exprs.vec_get(exprs, idx);
+
                     self.check_projection_on_field_expr(ctx, expr)?;
                 }
 
@@ -900,8 +538,10 @@ impl<'a> Analysis<'a> {
             }
 
             Value::Record(fields) => {
-                for field in fields {
-                    self.check_projection_on_field(ctx, field)?;
+                for idx in 0..self.arena.exprs.rec(fields).len() {
+                    let field = self.arena.exprs.rec_get(fields, idx);
+
+                    self.check_projection_on_field(ctx, &field)?;
                 }
 
                 Ok(())
@@ -910,8 +550,11 @@ impl<'a> Analysis<'a> {
             Value::Access(access) => self.check_projection_on_field_expr(ctx, access.target),
 
             Value::App(app) => {
-                if let Some(Type::App { aggregate, .. }) =
-                    self.options.default_scope.entries.get(app.func.as_str())
+                if let Some(Type::App { aggregate, .. }) = self
+                    .options
+                    .default_scope
+                    .entries
+                    .get(self.arena.get_str(&app.func))
                 {
                     ctx.use_agg_func |= *aggregate;
 
@@ -926,7 +569,9 @@ impl<'a> Analysis<'a> {
                         return self.expect_agg_func(expr);
                     }
 
-                    for arg in app.args.iter().copied() {
+                    for idx in 0..self.arena.exprs.vec(app.args).len() {
+                        let arg = self.arena.exprs.vec_get(app.args, idx);
+
                         self.invalidate_agg_func_usage(arg)?;
                     }
                 }
@@ -940,18 +585,24 @@ impl<'a> Analysis<'a> {
             }
 
             Value::Unary(unary) => self.check_projection_on_field_expr(ctx, unary.expr),
-            Value::Group(expr) => self.check_projection_on_field_expr(ctx, *expr),
+            Value::Group(expr) => self.check_projection_on_field_expr(ctx, expr),
         }
     }
 
     fn expect_agg_func(&self, expr: ExprRef) -> AnalysisResult<()> {
-        let node = self.arena.get(expr);
+        let node = self.arena.exprs.get(expr);
         if let Value::App(app) = node.value
             && let Some(Type::App {
                 aggregate: true, ..
-            }) = self.options.default_scope.entries.get(app.func.as_str())
+            }) = self
+                .options
+                .default_scope
+                .entries
+                .get(self.arena.get_str(&app.func))
         {
-            for arg in app.args.iter().copied() {
+            for idx in 0..self.arena.exprs.vec(app.args).len() {
+                let arg = self.arena.exprs.vec_get(app.args, idx);
+
                 self.ensure_agg_param_is_source_bound(arg)?;
                 self.invalidate_agg_func_usage(arg)?;
             }
@@ -966,10 +617,10 @@ impl<'a> Analysis<'a> {
     }
 
     fn expect_agg_expr(&self, expr: ExprRef) -> AnalysisResult<bool> {
-        let node = self.arena.get(expr);
+        let node = self.arena.exprs.get(expr);
         match node.value {
             Value::Id(id) => {
-                if self.scope.entries.contains_key(id.as_str()) {
+                if self.scope.entries.contains_key(self.arena.get_str(&id)) {
                     return Err(AnalysisError::UnallowedAggFuncUsageWithSrcField(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
@@ -978,7 +629,7 @@ impl<'a> Analysis<'a> {
 
                 Ok(false)
             }
-            Value::Group(expr) => self.expect_agg_expr(*expr),
+            Value::Group(expr) => self.expect_agg_expr(expr),
             Value::Binary(binary) => {
                 let lhs = self.expect_agg_expr(binary.lhs)?;
                 let rhs = self.expect_agg_expr(binary.rhs)?;
@@ -1003,13 +654,19 @@ impl<'a> Analysis<'a> {
     }
 
     fn ensure_agg_param_is_source_bound(&self, expr: ExprRef) -> AnalysisResult<()> {
-        let node = self.arena.get(expr);
+        let node = self.arena.exprs.get(expr);
         match node.value {
-            Value::Id(id) if !self.options.default_scope.entries.contains_key(id.as_str()) => {
+            Value::Id(id)
+                if !self
+                    .options
+                    .default_scope
+                    .entries
+                    .contains_key(self.arena.get_str(&id)) =>
+            {
                 Ok(())
             }
             Value::Access(access) => self.ensure_agg_param_is_source_bound(access.target),
-            Value::Binary(binary) => self.ensure_agg_binary_op_is_source_bound(node.attrs, *binary),
+            Value::Binary(binary) => self.ensure_agg_binary_op_is_source_bound(node.attrs, binary),
             Value::Unary(unary) => self.ensure_agg_param_is_source_bound(unary.expr),
 
             _ => Err(AnalysisError::ExpectSourceBoundProperty(
@@ -1037,44 +694,60 @@ impl<'a> Analysis<'a> {
     }
 
     fn ensure_agg_binary_op_branch_is_source_bound(&self, expr: ExprRef) -> bool {
-        let node = self.arena.get(expr);
+        let node = self.arena.exprs.get(expr);
         match node.value {
-            Value::Id(id) => !self.options.default_scope.entries.contains_key(id.as_str()),
+            Value::Id(id) => !self
+                .options
+                .default_scope
+                .entries
+                .contains_key(self.arena.get_str(&id)),
             Value::Array(exprs) => {
-                if exprs.is_empty() {
+                if self.arena.exprs.vec(exprs).is_empty() {
                     return false;
                 }
 
-                exprs
-                    .iter()
-                    .copied()
-                    .all(|expr| self.ensure_agg_binary_op_branch_is_source_bound(expr))
+                for idx in 0..self.arena.exprs.vec(exprs).len() {
+                    let expr = self.arena.exprs.vec_get(exprs, idx);
+
+                    if !self.ensure_agg_binary_op_branch_is_source_bound(expr) {
+                        return false;
+                    }
+                }
+
+                true
             }
             Value::Record(fields) => {
-                if fields.is_empty() {
+                if self.arena.exprs.rec(fields).is_empty() {
                     return false;
                 }
 
-                fields
-                    .iter()
-                    .all(|field| self.ensure_agg_binary_op_branch_is_source_bound(field.expr))
+                for idx in 0..self.arena.exprs.rec(fields).len() {
+                    let field = self.arena.exprs.rec_get(fields, idx);
+
+                    if !self.ensure_agg_binary_op_branch_is_source_bound(field.expr) {
+                        return false;
+                    }
+                }
+
+                true
             }
+
             Value::Access(access) => {
                 self.ensure_agg_binary_op_branch_is_source_bound(access.target)
             }
 
             Value::Binary(binary) => self
-                .ensure_agg_binary_op_is_source_bound(node.attrs, *binary)
+                .ensure_agg_binary_op_is_source_bound(node.attrs, binary)
                 .is_ok(),
             Value::Unary(unary) => self.ensure_agg_binary_op_branch_is_source_bound(unary.expr),
-            Value::Group(expr) => self.ensure_agg_binary_op_branch_is_source_bound(*expr),
+            Value::Group(expr) => self.ensure_agg_binary_op_branch_is_source_bound(expr),
 
             Value::Number(_) | Value::String(_) | Value::Bool(_) | Value::App(_) => false,
         }
     }
 
     fn invalidate_agg_func_usage(&self, expr: ExprRef) -> AnalysisResult<()> {
-        let node = self.arena.get(expr);
+        let node = self.arena.exprs.get(expr);
         match node.value {
             Value::Number(_)
             | Value::String(_)
@@ -1083,7 +756,9 @@ impl<'a> Analysis<'a> {
             | Value::Access(_) => Ok(()),
 
             Value::Array(exprs) => {
-                for expr in exprs.iter().copied() {
+                for idx in 0..self.arena.exprs.vec(exprs).len() {
+                    let expr = self.arena.exprs.vec_get(exprs, idx);
+
                     self.invalidate_agg_func_usage(expr)?;
                 }
 
@@ -1091,7 +766,9 @@ impl<'a> Analysis<'a> {
             }
 
             Value::Record(fields) => {
-                for field in fields {
+                for idx in 0..self.arena.exprs.rec(fields).len() {
+                    let field = self.arena.exprs.rec_get(fields, idx);
+
                     self.invalidate_agg_func_usage(field.expr)?;
                 }
 
@@ -1099,18 +776,22 @@ impl<'a> Analysis<'a> {
             }
 
             Value::App(app) => {
-                if let Some(Type::App { aggregate, .. }) =
-                    self.options.default_scope.entries.get(app.func.as_str())
+                if let Some(Type::App { aggregate, .. }) = self
+                    .options
+                    .default_scope
+                    .entries
+                    .get(self.arena.get_str(&app.func))
                     && *aggregate
                 {
                     return Err(AnalysisError::WrongAggFunUsage(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
-                        app.func.clone(),
+                        self.arena.get_str(&app.func).to_owned(),
                     ));
                 }
 
-                for arg in app.args.iter().copied() {
+                for idx in 0..self.arena.exprs.vec(app.args).len() {
+                    let arg = self.arena.exprs.vec_get(app.args, idx);
                     self.invalidate_agg_func_usage(arg)?;
                 }
 
@@ -1123,12 +804,12 @@ impl<'a> Analysis<'a> {
             }
 
             Value::Unary(unary) => self.invalidate_agg_func_usage(unary.expr),
-            Value::Group(expr) => self.invalidate_agg_func_usage(*expr),
+            Value::Group(expr) => self.invalidate_agg_func_usage(expr),
         }
     }
 
     fn reject_constant_func(&self, attrs: Attrs, app: &App) -> AnalysisResult<()> {
-        if app.args.is_empty() {
+        if self.arena.exprs.vec(app.args).is_empty() {
             return Err(AnalysisError::ConstantExprInProjectIntoClause(
                 attrs.pos.line,
                 attrs.pos.col,
@@ -1136,7 +817,9 @@ impl<'a> Analysis<'a> {
         }
 
         let mut errored = None;
-        for arg in app.args.iter().copied() {
+        for idx in 0..self.arena.exprs.vec(app.args).len() {
+            let arg = self.arena.exprs.vec_get(app.args, idx);
+
             if let Err(e) = self.reject_constant_expr(arg) {
                 if errored.is_none() {
                     errored = Some(e);
@@ -1153,13 +836,15 @@ impl<'a> Analysis<'a> {
     }
 
     fn reject_constant_expr(&self, expr: ExprRef) -> AnalysisResult<()> {
-        let node = self.arena.get(expr);
+        let node = self.arena.exprs.get(expr);
         match node.value {
-            Value::Id(id) if self.scope.entries.contains_key(id.as_str()) => Ok(()),
+            Value::Id(id) if self.scope.entries.contains_key(self.arena.get_str(&id)) => Ok(()),
 
             Value::Array(exprs) => {
                 let mut errored = None;
-                for expr in exprs.iter().copied() {
+                for idx in 0..self.arena.exprs.vec(exprs).len() {
+                    let expr = self.arena.exprs.vec_get(exprs, idx);
+
                     if let Err(e) = self.reject_constant_expr(expr) {
                         if errored.is_none() {
                             errored = Some(e);
@@ -1177,7 +862,9 @@ impl<'a> Analysis<'a> {
 
             Value::Record(fields) => {
                 let mut errored = None;
-                for field in fields {
+                for idx in 0..self.arena.exprs.rec(fields).len() {
+                    let field = self.arena.exprs.rec_get(fields, idx);
+
                     if let Err(e) = self.reject_constant_expr(field.expr) {
                         if errored.is_none() {
                             errored = Some(e);
@@ -1198,9 +885,9 @@ impl<'a> Analysis<'a> {
                 .or_else(|e| self.reject_constant_expr(binary.rhs).map_err(|_| e)),
 
             Value::Access(access) => self.reject_constant_expr(access.target),
-            Value::App(app) => self.reject_constant_func(node.attrs, app),
+            Value::App(app) => self.reject_constant_func(node.attrs, &app),
             Value::Unary(unary) => self.reject_constant_expr(unary.expr),
-            Value::Group(expr) => self.reject_constant_expr(*expr),
+            Value::Group(expr) => self.reject_constant_expr(expr),
 
             _ => Err(AnalysisError::ConstantExprInProjectIntoClause(
                 node.attrs.pos.line,
@@ -1242,53 +929,66 @@ impl<'a> Analysis<'a> {
         expr: ExprRef,
         mut expect: Type,
     ) -> AnalysisResult<Type> {
-        let node = self.arena.get(expr);
+        let node = self.arena.exprs.get(expr);
         match node.value {
-            Value::Number(_) => expect.check(node.attrs, Type::Number),
-            Value::String(_) => expect.check(node.attrs, Type::String),
-            Value::Bool(_) => expect.check(node.attrs, Type::Bool),
+            Value::Number(_) => self.arena.type_check(node.attrs, expect, Type::Number),
+            Value::String(_) => self.arena.type_check(node.attrs, expect, Type::String),
+            Value::Bool(_) => self.arena.type_check(node.attrs, expect, Type::Bool),
 
             Value::Id(id) => {
-                if let Some(tpe) = self.options.default_scope.entries.get(id.as_str()) {
-                    expect.check(node.attrs, tpe.clone())
-                } else if let Some(tpe) = self.scope.entries.get_mut(id.as_str()) {
-                    let tmp = mem::take(tpe);
-                    *tpe = tmp.check(node.attrs, expect)?;
+                if let Some(tpe) = self
+                    .options
+                    .default_scope
+                    .entries
+                    .get(self.arena.get_str(&id))
+                    .copied()
+                {
+                    self.arena.type_check(node.attrs, expect, tpe)
+                } else if let Some(tpe) = self.scope.entries.get_mut(self.arena.get_str(&id)) {
+                    *tpe = self.arena.type_check(node.attrs, mem::take(tpe), expect)?;
 
-                    Ok(tpe.clone())
+                    Ok(*tpe)
                 } else {
                     Err(AnalysisError::VariableUndeclared(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
-                        id.to_owned(),
+                        self.arena.get_str(&id).to_owned(),
                     ))
                 }
             }
 
             Value::Array(exprs) => {
                 if matches!(expect, Type::Unspecified) {
-                    for expr in exprs.iter().copied() {
+                    for idx in self.arena.exprs.vec_idxes(exprs) {
+                        let expr = self.arena.exprs.vec_get(exprs, idx);
+
                         expect = self.analyze_expr(ctx, expr, expect)?;
                     }
 
-                    return Ok(Type::Array(Box::new(expect)));
+                    return Ok(self.arena.types.alloc_array_of(expect));
                 }
 
                 match expect {
-                    Type::Array(mut expect) => {
-                        for expr in exprs.iter().copied() {
-                            *expect = self.analyze_expr(ctx, expr, expect.as_ref().clone())?;
+                    Type::Array(expect) => {
+                        let mut expect = self.arena.types.get_type(&expect);
+                        for idx in 0..self.arena.exprs.vec(exprs).len() {
+                            let expr = self.arena.exprs.vec_get(exprs, idx);
+                            expect = self.analyze_expr(ctx, expr, expect)?;
                         }
 
-                        Ok(Type::Array(expect))
+                        Ok(self.arena.types.alloc_array_of(expect))
                     }
 
-                    expect => Err(AnalysisError::TypeMismatch(
-                        node.attrs.pos.line,
-                        node.attrs.pos.col,
-                        expect,
-                        self.project_type(expr),
-                    )),
+                    expect => {
+                        let tpe = self.project_type(expr);
+
+                        Err(AnalysisError::TypeMismatch(
+                            node.attrs.pos.line,
+                            node.attrs.pos.col,
+                            display_type(self.arena, &expect),
+                            display_type(self.arena, &tpe),
+                        ))
+                    }
                 }
             }
 
@@ -1296,60 +996,72 @@ impl<'a> Analysis<'a> {
                 if matches!(expect, Type::Unspecified) {
                     let mut record = FxHashMap::default();
 
-                    for field in fields {
+                    for idx in 0..self.arena.exprs.rec(fields).len() {
+                        let field = self.arena.exprs.rec_get(fields, idx);
+
                         record.insert(
-                            field.name.clone(),
+                            field.name,
                             self.analyze_expr(ctx, field.expr, Type::Unspecified)?,
                         );
                     }
 
-                    return Ok(Type::Record(record));
+                    return Ok(Type::Record(self.arena.types.alloc_record(record)));
                 }
 
-                match expect {
-                    Type::Record(mut types) if fields.len() == types.len() => {
-                        for field in fields {
-                            if let Some(tpe) = types.remove(field.name.as_str()) {
-                                types.insert(
-                                    field.name.clone(),
-                                    self.analyze_expr(ctx, field.expr, tpe)?,
-                                );
-                            } else {
-                                return Err(AnalysisError::FieldUndeclared(
-                                    field.attrs.pos.line,
-                                    field.attrs.pos.col,
-                                    field.name.clone(),
-                                ));
-                            }
+                if let Type::Record(rec) = expect
+                    && self.arena.types.record_len(rec) == self.arena.exprs.rec(fields).len()
+                {
+                    for idx in self.arena.exprs.rec_idxes(fields) {
+                        let field = self.arena.exprs.rec_get(fields, idx);
+
+                        if let Some(tpe) = self.arena.types.record_get(rec, field.name) {
+                            let new_tpe = self.analyze_expr(ctx, field.expr, tpe)?;
+                            self.arena.types.record_set(rec, field.name, new_tpe);
+                            continue;
                         }
 
-                        Ok(Type::Record(types))
+                        return Err(AnalysisError::FieldUndeclared(
+                            field.attrs.pos.line,
+                            field.attrs.pos.col,
+                            self.arena.get_str(&field.name).to_owned(),
+                        ));
                     }
 
-                    expect => Err(AnalysisError::TypeMismatch(
-                        node.attrs.pos.line,
-                        node.attrs.pos.col,
-                        expect,
-                        self.project_type(expr),
-                    )),
+                    return Ok(expect);
                 }
+
+                let tpe = self.project_type(expr);
+
+                Err(AnalysisError::TypeMismatch(
+                    node.attrs.pos.line,
+                    node.attrs.pos.col,
+                    display_type(self.arena, &expect),
+                    display_type(self.arena, &tpe),
+                ))
             }
 
-            Value::Access(_) => Ok(self.analyze_access(node.attrs, node.node_ref, expect)?),
+            Value::Access(_) => Ok(self.analyze_access(node.attrs, expr, expect)?),
 
             Value::App(app) => {
-                if let Some(tpe) = self.options.default_scope.entries.get(app.func.as_str())
+                if let Some(tpe) = self
+                    .options
+                    .default_scope
+                    .entries
+                    .get(self.arena.get_str(&app.func))
                     && let Type::App {
                         args,
                         result,
                         aggregate,
                     } = tpe
                 {
-                    if !args.match_arg_count(app.args.len()) {
+                    let args_actual_len = self.arena.exprs.vec(app.args).len();
+                    let args_decl_len = self.arena.types.get_args(&args.values).len();
+
+                    if !(args_actual_len >= args.needed && args_actual_len <= args_decl_len) {
                         return Err(AnalysisError::FunWrongArgumentCount(
                             node.attrs.pos.line,
                             node.attrs.pos.col,
-                            app.func.clone(),
+                            self.arena.get_str(&app.func).to_owned(),
                         ));
                     }
 
@@ -1357,7 +1069,7 @@ impl<'a> Analysis<'a> {
                         return Err(AnalysisError::WrongAggFunUsage(
                             node.attrs.pos.line,
                             node.attrs.pos.col,
-                            app.func.clone(),
+                            self.arena.get_str(&app.func).to_owned(),
                         ));
                     }
 
@@ -1365,20 +1077,26 @@ impl<'a> Analysis<'a> {
                         ctx.use_agg_funcs = true;
                     }
 
-                    for (arg, tpe) in app.args.iter().copied().zip(args.values.iter().cloned()) {
+                    let arg_types = self.arena.types.args_idxes(args.values);
+                    let args_idxes = self.arena.exprs.vec_idxes(app.args);
+                    for (val_idx, tpe_idx) in args_idxes.zip(arg_types) {
+                        let arg = self.arena.exprs.vec_get(app.args, val_idx);
+                        let tpe = self.arena.types.args_get(args.values, tpe_idx);
+
                         self.analyze_expr(ctx, arg, tpe)?;
                     }
 
                     if matches!(expect, Type::Unspecified) {
-                        Ok(result.as_ref().clone())
+                        Ok(self.arena.types.get_type(result))
                     } else {
-                        expect.check(node.attrs, result.as_ref().clone())
+                        self.arena
+                            .type_check(node.attrs, expect, self.arena.types.get_type(result))
                     }
                 } else {
                     Err(AnalysisError::FuncUndeclared(
                         node.attrs.pos.line,
                         node.attrs.pos.col,
-                        app.func.clone(),
+                        self.arena.get_str(&app.func).to_owned(),
                     ))
                 }
             }
@@ -1387,7 +1105,7 @@ impl<'a> Analysis<'a> {
                 Operator::Add | Operator::Sub | Operator::Mul | Operator::Div => {
                     self.analyze_expr(ctx, binary.lhs, Type::Number)?;
                     self.analyze_expr(ctx, binary.rhs, Type::Number)?;
-                    expect.check(node.attrs, Type::Number)
+                    self.arena.type_check(node.attrs, expect, Type::Number)
                 }
 
                 Operator::Eq
@@ -1397,7 +1115,7 @@ impl<'a> Analysis<'a> {
                 | Operator::Gt
                 | Operator::Gte => {
                     let lhs_expect = self.analyze_expr(ctx, binary.lhs, Type::Unspecified)?;
-                    let rhs_expect = self.analyze_expr(ctx, binary.rhs, lhs_expect.clone())?;
+                    let rhs_expect = self.analyze_expr(ctx, binary.rhs, lhs_expect)?;
 
                     // If the left side didn't have enough type information while the other did,
                     // we replay another typecheck pass on the left side if the right side was conclusive
@@ -1407,58 +1125,55 @@ impl<'a> Analysis<'a> {
                         self.analyze_expr(ctx, binary.lhs, rhs_expect)?;
                     }
 
-                    expect.check(node.attrs, Type::Bool)
+                    self.arena.type_check(node.attrs, expect, Type::Bool)
                 }
 
                 Operator::Contains => {
-                    let lhs_expect = self.analyze_expr(
-                        ctx,
-                        binary.lhs,
-                        Type::Array(Box::new(Type::Unspecified)),
-                    )?;
+                    let new_expect = self.arena.types.alloc_array_of(Type::Unspecified);
+                    let lhs_expect = self.analyze_expr(ctx, binary.lhs, new_expect)?;
 
                     let lhs_assumption = match lhs_expect {
-                        Type::Array(inner) => *inner,
+                        Type::Array(inner) => self.arena.types.get_type(&inner),
                         other => {
                             return Err(AnalysisError::ExpectArray(
                                 node.attrs.pos.line,
                                 node.attrs.pos.col,
-                                other,
+                                display_type(self.arena, &other),
                             ));
                         }
                     };
 
-                    let rhs_expect = self.analyze_expr(ctx, binary.rhs, lhs_assumption.clone())?;
+                    let rhs_expect = self.analyze_expr(ctx, binary.rhs, lhs_assumption)?;
 
                     // If the left side didn't have enough type information while the other did,
                     // we replay another typecheck pass on the left side if the right side was conclusive
                     if matches!(lhs_assumption, Type::Unspecified)
                         && !matches!(rhs_expect, Type::Unspecified)
                     {
-                        self.analyze_expr(ctx, binary.lhs, Type::Array(Box::new(rhs_expect)))?;
+                        let new_expect = self.arena.types.alloc_array_of(rhs_expect);
+                        self.analyze_expr(ctx, binary.lhs, new_expect)?;
                     }
 
-                    expect.check(node.attrs, Type::Bool)
+                    self.arena.type_check(node.attrs, expect, Type::Bool)
                 }
 
                 Operator::And | Operator::Or | Operator::Xor => {
                     self.analyze_expr(ctx, binary.lhs, Type::Bool)?;
                     self.analyze_expr(ctx, binary.rhs, Type::Bool)?;
-
-                    expect.check(node.attrs, Type::Bool)
+                    self.arena.type_check(node.attrs, expect, Type::Bool)
                 }
 
                 Operator::As => {
-                    let rhs = self.arena.get(binary.rhs);
+                    let rhs = self.arena.exprs.get(binary.rhs);
                     if let Value::Id(name) = rhs.value {
-                        return if let Some(tpe) = name_to_type(self.options, name) {
+                        return if let Some(tpe) = name_to_type(self.arena, self.options, name) {
                             // NOTE - we could check if it's safe to convert the left branch to that type
                             Ok(tpe)
                         } else {
                             Err(AnalysisError::UnsupportedCustomType(
                                 rhs.attrs.pos.line,
                                 rhs.attrs.pos.col,
-                                name.clone(),
+                                self.arena.get_str(&name).to_owned(),
                             ))
                         };
                     }
@@ -1474,18 +1189,18 @@ impl<'a> Analysis<'a> {
             Value::Unary(unary) => match unary.operator {
                 Operator::Add | Operator::Sub => {
                     self.analyze_expr(ctx, unary.expr, Type::Number)?;
-                    expect.check(node.attrs, Type::Number)
+                    self.arena.type_check(node.attrs, expect, Type::Number)
                 }
 
                 Operator::Not => {
                     self.analyze_expr(ctx, unary.expr, Type::Bool)?;
-                    expect.check(node.attrs, Type::Bool)
+                    self.arena.type_check(node.attrs, expect, Type::Bool)
                 }
 
                 _ => unreachable!(),
             },
 
-            Value::Group(expr) => Ok(self.analyze_expr(ctx, *expr, expect)?),
+            Value::Group(expr) => Ok(self.analyze_expr(ctx, expr, expect)?),
         }
     }
 
@@ -1495,15 +1210,15 @@ impl<'a> Analysis<'a> {
         access: ExprRef,
         expect: Type,
     ) -> AnalysisResult<Type> {
-        struct State<A, B> {
+        struct State {
             depth: u8,
             /// When true means we are into dynamically type object.
             dynamic: bool,
-            definition: Def<A, B>,
+            definition: Def,
         }
 
-        impl<A, B> State<A, B> {
-            fn new(definition: Def<A, B>) -> Self {
+        impl State {
+            fn new(definition: Def) -> Self {
                 Self {
                     depth: 0,
                     dynamic: false,
@@ -1512,29 +1227,69 @@ impl<'a> Analysis<'a> {
             }
         }
 
-        enum Def<A, B> {
-            User(A),
-            System(B),
+        #[derive(Copy, Clone)]
+        struct Parent {
+            record: Record,
+            field: Option<StrRef>,
         }
 
-        fn go<'a>(
-            scope: &'a mut Scope,
-            arena: &'a ExprArena,
-            sys: &'a AnalysisOptions,
+        enum Def {
+            User { parent: Parent, tpe: Type },
+            System(Type),
+        }
+
+        fn go<'global>(
+            scope: &mut Scope,
+            arena: &'global mut Arena,
+            sys: &'global AnalysisOptions,
             expr: ExprRef,
-        ) -> AnalysisResult<State<&'a mut Type, &'a Type>> {
-            let node = arena.get(expr);
+        ) -> AnalysisResult<State> {
+            let node = arena.exprs.get(expr);
             match node.value {
                 Value::Id(id) => {
-                    if let Some(tpe) = sys.default_scope.entries.get(id.as_str()) {
-                        Ok(State::new(Def::System(tpe)))
-                    } else if let Some(tpe) = scope.entries.get_mut(id.as_str()) {
-                        Ok(State::new(Def::User(tpe)))
+                    if let Some(tpe) = sys.default_scope.entries.get(arena.get_str(&id)).copied() {
+                        if matches!(tpe, Type::Record(_)) {
+                            Ok(State::new(Def::System(tpe)))
+                        } else {
+                            Err(AnalysisError::ExpectRecord(
+                                node.attrs.pos.line,
+                                node.attrs.pos.col,
+                                display_type(arena, &tpe),
+                            ))
+                        }
+                    } else if let Some(tpe) = scope.entries.get(arena.get_str(&id)).copied() {
+                        if matches!(tpe, Type::Unspecified) {
+                            let record = arena.types.instantiate_record();
+                            scope
+                                .entries
+                                .insert(arena.get_str(&id), Type::Record(record));
+                            Ok(State::new(Def::User {
+                                parent: Parent {
+                                    record,
+                                    field: None,
+                                },
+                                tpe: Type::Record(record),
+                            }))
+                        } else if let Type::Record(record) = tpe {
+                            Ok(State::new(Def::User {
+                                parent: Parent {
+                                    record,
+                                    field: None,
+                                },
+                                tpe,
+                            }))
+                        } else {
+                            Err(AnalysisError::ExpectRecord(
+                                node.attrs.pos.line,
+                                node.attrs.pos.col,
+                                display_type(arena, &tpe),
+                            ))
+                        }
                     } else {
                         Err(AnalysisError::VariableUndeclared(
                             node.attrs.pos.line,
                             node.attrs.pos.col,
-                            id.clone(),
+                            arena.get_str(&id).to_owned(),
                         ))
                     }
                 }
@@ -1542,7 +1297,7 @@ impl<'a> Analysis<'a> {
                     let mut state = go(scope, arena, sys, access.target)?;
 
                     // TODO - we should consider make that field and depth configurable.
-                    let is_data_field = state.depth == 0 && access.field == "data";
+                    let is_data_field = state.depth == 0 && arena.get_str(&access.field) == "data";
 
                     // TODO - we should consider make that behavior configurable.
                     // the `data` property is where the JSON payload is located, which means
@@ -1552,57 +1307,81 @@ impl<'a> Analysis<'a> {
                     }
 
                     match state.definition {
-                        Def::User(tpe) => {
+                        Def::User { parent, tpe } => {
                             if matches!(tpe, Type::Unspecified) && state.dynamic {
-                                *tpe = Type::Record(FxHashMap::from_iter([(
-                                    access.field.clone(),
-                                    Type::Unspecified,
-                                )]));
+                                let record = arena.types.instantiate_record();
+                                arena
+                                    .types
+                                    .record_set(record, access.field, Type::Unspecified);
+
+                                // TODO - this is impossible. Should return a proper error instead of panicking
+                                if let Some(field) = parent.field {
+                                    arena.types.record_set(
+                                        parent.record,
+                                        field,
+                                        Type::Record(record),
+                                    );
+                                }
+
                                 return Ok(State {
                                     depth: state.depth + 1,
-                                    definition: Def::User(
-                                        tpe.as_record_or_panic_mut()
-                                            .get_mut(access.field.as_str())
-                                            .unwrap(),
-                                    ),
+                                    definition: Def::User {
+                                        parent: Parent {
+                                            record,
+                                            field: Some(access.field),
+                                        },
+                                        tpe: Type::Unspecified,
+                                    },
                                     ..state
                                 });
-                            }
-
-                            if let Type::Record(fields) = tpe {
-                                return match fields.entry(access.field.clone()) {
-                                    Entry::Vacant(entry) => {
-                                        if state.dynamic || is_data_field {
-                                            return Ok(State {
-                                                depth: state.depth + 1,
-                                                definition: Def::User(
-                                                    entry.insert(Type::Unspecified),
-                                                ),
-                                                ..state
-                                            });
-                                        }
-
-                                        Err(AnalysisError::FieldUndeclared(
-                                            node.attrs.pos.line,
-                                            node.attrs.pos.col,
-                                            access.field.clone(),
-                                        ))
-                                    }
-
-                                    Entry::Occupied(entry) => {
+                            } else if let Type::Record(record) = tpe {
+                                return if let Some(tpe) =
+                                    arena.types.record_get(record, access.field)
+                                {
+                                    Ok(State {
+                                        depth: state.depth + 1,
+                                        definition: Def::User {
+                                            parent: Parent {
+                                                record,
+                                                field: Some(access.field),
+                                            },
+                                            tpe,
+                                        },
+                                        ..state
+                                    })
+                                } else {
+                                    // TODO - that test seems useless because it can't be the data field and not be dynamic
+                                    if state.dynamic || is_data_field {
+                                        arena.types.record_set(
+                                            record,
+                                            access.field,
+                                            Type::Unspecified,
+                                        );
                                         return Ok(State {
                                             depth: state.depth + 1,
-                                            definition: Def::User(entry.into_mut()),
+                                            definition: Def::User {
+                                                parent: Parent {
+                                                    record,
+                                                    field: Some(access.field),
+                                                },
+                                                tpe: Type::Unspecified,
+                                            },
                                             ..state
                                         });
                                     }
+
+                                    Err(AnalysisError::FieldUndeclared(
+                                        node.attrs.pos.line,
+                                        node.attrs.pos.col,
+                                        arena.get_str(&access.field).to_owned(),
+                                    ))
                                 };
                             }
 
                             Err(AnalysisError::ExpectRecord(
                                 node.attrs.pos.line,
                                 node.attrs.pos.col,
-                                tpe.clone(),
+                                display_type(arena, &tpe),
                             ))
                         }
 
@@ -1610,13 +1389,13 @@ impl<'a> Analysis<'a> {
                             if matches!(tpe, Type::Unspecified) && state.dynamic {
                                 return Ok(State {
                                     depth: state.depth + 1,
-                                    definition: Def::System(&Type::Unspecified),
+                                    definition: Def::System(Type::Unspecified),
                                     ..state
                                 });
                             }
 
-                            if let Type::Record(fields) = tpe {
-                                if let Some(field) = fields.get(access.field.as_str()) {
+                            if let Type::Record(rec) = tpe {
+                                if let Some(field) = arena.types.record_get(rec, access.field) {
                                     return Ok(State {
                                         depth: state.depth + 1,
                                         definition: Def::System(field),
@@ -1627,14 +1406,14 @@ impl<'a> Analysis<'a> {
                                 return Err(AnalysisError::FieldUndeclared(
                                     node.attrs.pos.line,
                                     node.attrs.pos.col,
-                                    access.field.clone(),
+                                    arena.get_str(&access.field).to_owned(),
                                 ));
                             }
 
                             Err(AnalysisError::ExpectRecord(
                                 node.attrs.pos.line,
                                 node.attrs.pos.col,
-                                tpe.clone(),
+                                display_type(arena, &tpe),
                             ))
                         }
                     }
@@ -1654,31 +1433,40 @@ impl<'a> Analysis<'a> {
         let state = go(&mut self.scope, self.arena, self.options, access)?;
 
         match state.definition {
-            Def::User(tpe) => {
-                let tmp = mem::take(tpe);
-                *tpe = tmp.check(attrs, expect)?;
+            Def::User { parent, tpe } => {
+                let new_tpe = self.arena.type_check(attrs, tpe, expect)?;
 
-                Ok(tpe.clone())
+                if let Some(field) = parent.field {
+                    self.arena.types.record_set(parent.record, field, new_tpe);
+                }
+
+                Ok(new_tpe)
             }
 
-            Def::System(tpe) => tpe.clone().check(attrs, expect),
+            Def::System(tpe) => self.arena.type_check(attrs, tpe, expect),
         }
     }
 
-    fn projection_type(&self, query: &Query<Typed>) -> Type {
+    fn projection_type(&mut self, query: &Query<Typed>) -> Type {
         self.project_type(query.projection)
     }
 
-    fn project_type(&self, node: ExprRef) -> Type {
-        match self.arena.get(node).value {
+    fn project_type(&mut self, node: ExprRef) -> Type {
+        match self.arena.exprs.get(node).value {
             Value::Number(_) => Type::Number,
             Value::String(_) => Type::String,
             Value::Bool(_) => Type::Bool,
             Value::Id(id) => {
-                if let Some(tpe) = self.options.default_scope.entries.get(id.as_str()) {
-                    tpe.clone()
-                } else if let Some(tpe) = self.scope.entries.get(id.as_str()) {
-                    tpe.clone()
+                if let Some(tpe) = self
+                    .options
+                    .default_scope
+                    .entries
+                    .get(self.arena.get_str(&id))
+                    .copied()
+                {
+                    tpe
+                } else if let Some(tpe) = self.scope.entries.get(self.arena.get_str(&id)).copied() {
+                    tpe
                 } else {
                     Type::Unspecified
                 }
@@ -1686,7 +1474,8 @@ impl<'a> Analysis<'a> {
             Value::Array(exprs) => {
                 let mut project = Type::Unspecified;
 
-                for expr in exprs.iter().copied() {
+                for idx in self.arena.exprs.vec_idxes(exprs) {
+                    let expr = self.arena.exprs.vec_get(exprs, idx);
                     let tmp = self.project_type(expr);
 
                     if !matches!(tmp, Type::Unspecified) {
@@ -1695,20 +1484,25 @@ impl<'a> Analysis<'a> {
                     }
                 }
 
-                Type::Array(Box::new(project))
+                self.arena.types.alloc_array_of(project)
             }
-            Value::Record(fields) => Type::Record(
-                fields
-                    .iter()
-                    .map(|field| (field.name.clone(), self.project_type(field.expr)))
-                    .collect(),
-            ),
+            Value::Record(fields) => {
+                let mut props = FxHashMap::default();
+
+                for idx in self.arena.exprs.rec_idxes(fields) {
+                    let field = self.arena.exprs.rec_get(fields, idx);
+                    let tpe = self.project_type(field.expr);
+                    props.insert(field.name, tpe);
+                }
+
+                Type::Record(self.arena.types.alloc_record(props))
+            }
             Value::Access(access) => {
                 let tpe = self.project_type(access.target);
-                if let Type::Record(fields) = tpe {
-                    fields
-                        .get(access.field.as_str())
-                        .cloned()
+                if let Type::Record(record) = tpe {
+                    self.arena
+                        .types
+                        .record_get(record, access.field)
                         .unwrap_or_default()
                 } else {
                     Type::Unspecified
@@ -1718,14 +1512,14 @@ impl<'a> Analysis<'a> {
                 .options
                 .default_scope
                 .entries
-                .get(app.func.as_str())
+                .get(self.arena.get_str(&app.func))
                 .cloned()
                 .unwrap_or_default(),
             Value::Binary(binary) => match binary.operator {
                 Operator::Add | Operator::Sub | Operator::Mul | Operator::Div => Type::Number,
                 Operator::As => {
-                    if let Value::Id(n) = self.arena.get(binary.rhs).value
-                        && let Some(tpe) = name_to_type(self.options, n.as_str())
+                    if let Value::Id(n) = self.arena.exprs.get(binary.rhs).value
+                        && let Some(tpe) = name_to_type(self.arena, self.options, n)
                     {
                         tpe
                     } else {
@@ -1761,7 +1555,125 @@ impl<'a> Analysis<'a> {
                 | Operator::Contains
                 | Operator::As => unreachable!(),
             },
-            Value::Group(expr) => self.project_type(*expr),
+            Value::Group(expr) => self.project_type(expr),
+        }
+    }
+}
+
+impl Arena {
+    /// Checks if two types are the same.
+    ///
+    /// * If `this` is `Type::Unspecified` then `self` is updated to the more specific `Type`.
+    /// * If `this` is `Type::Subject` and is checked against a `Type::String` then `self` is updated to `Type::String`
+    fn type_check(&mut self, attrs: Attrs, this: Type, other: Type) -> Result<Type, AnalysisError> {
+        match (this, other) {
+            (Type::Unspecified, other) => Ok(other),
+            (this, Type::Unspecified) => Ok(this),
+            (Type::Subject, Type::Subject) => Ok(Type::Subject),
+
+            // Subjects are strings so there is no reason to reject a type
+            // when compared to a string. However, when it happens, we demote
+            // a subject to a string.
+            (Type::Subject, Type::String) => Ok(Type::String),
+            (Type::String, Type::Subject) => Ok(Type::String),
+
+            (Type::Number, Type::Number) => Ok(Type::Number),
+            (Type::String, Type::String) => Ok(Type::String),
+            (Type::Bool, Type::Bool) => Ok(Type::Bool),
+            (Type::Date, Type::Date) => Ok(Type::Date),
+            (Type::Time, Type::Time) => Ok(Type::Time),
+            (Type::DateTime, Type::DateTime) => Ok(Type::DateTime),
+
+            // `DateTime` can be implicitly cast to `Date` or `Time`
+            (Type::DateTime, Type::Date) => Ok(Type::Date),
+            (Type::Date, Type::DateTime) => Ok(Type::Date),
+            (Type::DateTime, Type::Time) => Ok(Type::Time),
+            (Type::Time, Type::DateTime) => Ok(Type::Time),
+            (Type::Custom(a), Type::Custom(b)) if self.eq_ignore_ascii_case(a, b) => {
+                Ok(Type::Custom(a))
+            }
+            (Type::Array(a), Type::Array(b)) => {
+                let a = self.types.get_type(&a);
+                let b = self.types.get_type(&b);
+                let tpe = self.type_check(attrs, a, b)?;
+
+                Ok(self.types.alloc_array_of(tpe))
+            }
+
+            (Type::Record(a), Type::Record(b)) if self.types.records_have_same_keys(a, b) => {
+                let mut map_a = mem::take(&mut self.types.records[a.0]);
+                let mut map_b = mem::take(&mut self.types.records[b.0]);
+
+                for (bk, bv) in map_b.iter_mut() {
+                    let av = map_a.get_mut(bk).unwrap();
+                    let new_tpe = self.type_check(attrs, *av, *bv)?;
+
+                    *av = new_tpe;
+                    *bv = new_tpe;
+                }
+
+                self.types.records[a.0] = map_a;
+                self.types.records[b.0] = map_b;
+
+                Ok(Type::Record(a))
+            }
+
+            (
+                Type::App {
+                    args: a_args,
+                    result: a_res,
+                    aggregate: a_agg,
+                },
+                Type::App {
+                    args: b_args,
+                    result: b_res,
+                    aggregate: b_agg,
+                },
+            ) if self.types.get_args(&a_args.values).len()
+                == self.types.get_args(&b_args.values).len()
+                && a_agg == b_agg =>
+            {
+                if self.types.get_args(&a_args.values).is_empty() {
+                    let a = self.types.get_type(&a_res);
+                    let b = self.types.get_type(&b_res);
+                    let new_res = self.type_check(attrs, a, b)?;
+
+                    return Ok(Type::App {
+                        args: a_args,
+                        result: self.types.register_type(new_res),
+                        aggregate: a_agg,
+                    });
+                }
+
+                let mut vec_a = mem::take(&mut self.types.args[a_args.values.0]);
+                let mut vec_b = mem::take(&mut self.types.args[b_args.values.0]);
+
+                for (a, b) in vec_a.iter_mut().zip(vec_b.iter_mut()) {
+                    let new_tpe = self.type_check(attrs, *a, *b)?;
+                    *a = new_tpe;
+                    *b = new_tpe;
+                }
+
+                self.types.args[a_args.values.0] = vec_a;
+                self.types.args[b_args.values.0] = vec_b;
+
+                let res_a = self.types.get_type(&a_res);
+                let res_b = self.types.get_type(&b_res);
+                let new_tpe = self.type_check(attrs, res_a, res_b)?;
+
+                Ok(Type::App {
+                    args: a_args,
+                    result: self.types.register_type(new_tpe),
+                    aggregate: a_agg,
+                })
+            }
+
+            (this, other) => Err(AnalysisError::TypeMismatch(
+                attrs.pos.line,
+                attrs.pos.col,
+                display_type(self, &this),
+                display_type(self, &other),
+            )),
         }
     }
 }
@@ -1797,7 +1709,13 @@ impl<'a> Analysis<'a> {
 /// assert!(matches!(name_to_type(&opts, "INT"), Some(Type::Number)));
 /// assert!(name_to_type(&opts, "unknown").is_none());
 /// ```
-pub fn name_to_type(opts: &AnalysisOptions, name: &str) -> Option<Type> {
+pub(crate) fn name_to_type(
+    arena: &Arena,
+    opts: &AnalysisOptions,
+    name_ref: StrRef,
+) -> Option<Type> {
+    let name = arena.get_str(&name_ref);
+
     if name.eq_ignore_ascii_case("string") {
         Some(Type::String)
     } else if name.eq_ignore_ascii_case("int") || name.eq_ignore_ascii_case("float64") {
@@ -1812,8 +1730,85 @@ pub fn name_to_type(opts: &AnalysisOptions, name: &str) -> Option<Type> {
         Some(Type::DateTime)
     } else if opts.custom_types.contains(&Ascii::new(name.to_owned())) {
         // ^ Sad we have to allocate here for no reason
-        Some(Type::Custom(name.to_owned()))
+
+        Some(Type::Custom(name_ref))
     } else {
         None
     }
+}
+
+pub(crate) fn display_type(arena: &Arena, tpe: &Type) -> String {
+    fn go(buffer: &mut String, arena: &Arena, tpe: &Type) {
+        match tpe {
+            Type::Unspecified => buffer.push_str("Any"),
+            Type::Number => buffer.push_str("Number"),
+            Type::String => buffer.push_str("String"),
+            Type::Bool => buffer.push_str("Bool"),
+            Type::Subject => buffer.push_str("Subject"),
+            Type::Date => buffer.push_str("Date"),
+            Type::Time => buffer.push_str("Time"),
+            Type::DateTime => buffer.push_str("DateTime"),
+            Type::Custom(n) => buffer.push_str(arena.get_str(n)),
+
+            Type::Array(tpe) => {
+                buffer.push_str("[]");
+                go(buffer, arena, &arena.types.get_type(tpe));
+            }
+
+            Type::Record(map) => {
+                let map = arena.types.get_record(map);
+
+                buffer.push_str("{ ");
+
+                for (idx, (name, value)) in map.iter().enumerate() {
+                    if idx != 0 {
+                        buffer.push_str(", ");
+                    }
+
+                    buffer.push_str(arena.get_str(name));
+                    buffer.push_str(": ");
+
+                    go(buffer, arena, value);
+                }
+
+                buffer.push_str(" }");
+            }
+
+            Type::App {
+                args,
+                result,
+                aggregate,
+            } => {
+                let fun_args = arena.types.get_args(&args.values);
+                buffer.push('(');
+
+                for (idx, arg) in fun_args.iter().enumerate() {
+                    if idx != 0 {
+                        buffer.push_str(", ");
+                    }
+
+                    go(buffer, arena, arg);
+
+                    if idx + 1 > args.needed {
+                        buffer.push('?');
+                    }
+                }
+
+                buffer.push(')');
+
+                if *aggregate {
+                    buffer.push_str(" => ");
+                } else {
+                    buffer.push_str(" -> ");
+                }
+
+                go(buffer, arena, &arena.types.get_type(result));
+            }
+        }
+    }
+
+    let mut buffer = String::new();
+    go(&mut buffer, arena, tpe);
+
+    buffer
 }
