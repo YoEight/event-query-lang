@@ -16,7 +16,7 @@ mod typing;
 use crate::arena::Arena;
 use crate::lexer::tokenize;
 use crate::prelude::{
-    display_type, name_to_type, parse, Analysis, AnalysisOptions, FunArgs, Type, Typed,
+    Analysis, AnalysisOptions, FunArgs, Type, Typed, display_type, name_to_type, parse,
 };
 use crate::token::Token;
 pub use ast::*;

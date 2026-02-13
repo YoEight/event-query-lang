@@ -33,6 +33,10 @@ impl StringArena {
         }
     }
 
+    /// Interns a string using case-insensitive hashing.
+    ///
+    /// Two strings that differ only in ASCII case will resolve to the same [`StrRef`].
+    /// The original casing of the first insertion is preserved.
     pub fn alloc_no_case(&mut self, value: &str) -> StrRef {
         let hash = Ascii::new(value);
         match self.cache.entry(self.hasher.hash_one(hash)) {

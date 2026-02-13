@@ -112,18 +112,29 @@ impl Scope {
         self.entries.is_empty()
     }
 
+    /// Declares a new variable binding in this scope.
+    ///
+    /// Returns `true` if the binding was newly inserted, or `false` if a binding
+    /// with the same name already existed (in which case the old value is replaced).
     pub fn declare(&mut self, name: StrRef, tpe: Type) -> bool {
         self.entries.insert(name, tpe).is_none()
     }
 
+    /// Looks up the type of a variable by name.
+    ///
+    /// Returns `None` if the variable is not declared in this scope.
     pub fn get(&self, name: StrRef) -> Option<Type> {
         self.entries.get(&name).copied()
     }
 
+    /// Returns a mutable reference to the type of a variable, allowing in-place updates.
+    ///
+    /// Returns `None` if the variable is not declared in this scope.
     pub fn get_mut(&mut self, name: StrRef) -> Option<&mut Type> {
         self.entries.get_mut(&name)
     }
 
+    /// Returns `true` if a variable with the given name is declared in this scope.
     pub fn exists(&self, name: StrRef) -> bool {
         self.entries.contains_key(&name)
     }
