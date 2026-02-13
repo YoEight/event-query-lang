@@ -3,7 +3,6 @@
 //! This library provides a complete lexer and parser for EventQL (EQL), a query language
 //! designed for event sourcing systems. It allows you to parse EQL query strings into
 //! an abstract syntax tree (AST) that can be analyzed or executed.
-mod analysis;
 pub mod arena;
 mod ast;
 mod error;
@@ -12,10 +11,13 @@ mod parser;
 #[cfg(test)]
 mod tests;
 mod token;
+mod typing;
 
-use crate::arena::ExprArena;
+use crate::arena::Arena;
 use crate::lexer::tokenize;
-use crate::prelude::{AnalysisOptions, Typed, parse, static_analysis};
+use crate::prelude::{
+    Analysis, AnalysisOptions, FunArgs, Type, Typed, display_type, name_to_type, parse,
+};
 use crate::token::Token;
 pub use ast::*;
 use rustc_hash::FxHashMap;
@@ -26,13 +28,120 @@ use unicase::Ascii;
 /// This module provides a single import point for all the library's public API,
 /// including AST types, error types, lexer, parser, and token types.
 pub mod prelude {
-    pub use super::analysis::*;
     pub use super::ast::*;
     pub use super::error::*;
     pub use super::parser::*;
     pub use super::token::*;
+    pub use super::typing::analysis::*;
+    pub use super::typing::*;
 }
 
+/// Builder for function argument specifications.
+///
+/// Allows defining function signatures with both required and optional parameters.
+/// When `required` equals the length of `args`, all parameters are required.
+pub struct FunArgsBuilder<'a> {
+    args: &'a [Type],
+    required: usize,
+}
+
+impl<'a> FunArgsBuilder<'a> {
+    /// Creates a new `FunArgsBuilder` with the given argument types and required count.
+    pub fn new(args: &'a [Type], required: usize) -> Self {
+        Self { args, required }
+    }
+}
+
+impl<'a> From<&'a [Type]> for FunArgsBuilder<'a> {
+    fn from(args: &'a [Type]) -> Self {
+        Self {
+            args,
+            required: args.len(),
+        }
+    }
+}
+
+impl<'a, const N: usize> From<&'a [Type; N]> for FunArgsBuilder<'a> {
+    fn from(value: &'a [Type; N]) -> Self {
+        Self {
+            args: value.as_slice(),
+            required: value.len(),
+        }
+    }
+}
+
+/// Builder for configuring event type information on a [`SessionBuilder`].
+///
+/// Obtained by calling [`SessionBuilder::declare_event_type`]. Use [`record`](EventTypeBuilder::record)
+/// to define a record-shaped event type or [`custom`](EventTypeBuilder::custom) for a named custom type.
+pub struct EventTypeBuilder {
+    parent: SessionBuilder,
+}
+
+impl EventTypeBuilder {
+    /// Starts building a record-shaped event type with named fields.
+    pub fn record(self) -> EventTypeRecordBuilder {
+        EventTypeRecordBuilder {
+            inner: self,
+            props: Default::default(),
+        }
+    }
+
+    /// Declares a custom (non-record) event type by name.
+    pub fn custom(self, _name: &str) -> SessionBuilder {
+        todo!("deal with custom type later")
+    }
+}
+
+/// Builder for defining the fields of a record-shaped event type.
+///
+/// Obtained by calling [`EventTypeBuilder::record`]. Add fields with [`prop`](EventTypeRecordBuilder::prop)
+/// and finalize with [`build`](EventTypeRecordBuilder::build) to return to the [`SessionBuilder`].
+pub struct EventTypeRecordBuilder {
+    inner: EventTypeBuilder,
+    props: FxHashMap<StrRef, Type>,
+}
+
+impl EventTypeRecordBuilder {
+    /// Conditionally adds a field to the event record type.
+    pub fn prop_when(mut self, test: bool, name: &str, tpe: Type) -> Self {
+        if test {
+            self.props
+                .insert(self.inner.parent.arena.strings.alloc(name), tpe);
+        }
+
+        self
+    }
+
+    /// Adds a field with the given name and type to the event record type.
+    pub fn prop(mut self, name: &str, tpe: Type) -> Self {
+        self.props
+            .insert(self.inner.parent.arena.strings.alloc(name), tpe);
+        self
+    }
+
+    /// Conditionally adds a field with a custom type to the event record type.
+    pub fn prop_with_custom_when(mut self, test: bool, name: &str, tpe: &str) -> Self {
+        if test {
+            let tpe = self.inner.parent.arena.strings.alloc(tpe);
+            self.props.insert(
+                self.inner.parent.arena.strings.alloc(name),
+                Type::Custom(tpe),
+            );
+        }
+
+        self
+    }
+
+    /// Finalizes the event record type and returns the [`SessionBuilder`].
+    pub fn build(mut self) -> SessionBuilder {
+        let ptr = self.inner.parent.arena.types.alloc_record(self.props);
+        self.inner.parent.options.event_type_info = Type::Record(ptr);
+        self.inner.parent
+    }
+}
+
+/// A specialized `Result` type for EventQL parser operations.
 pub type Result<A> = std::result::Result<A, error::Error>;
 
 /// `SessionBuilder` is a builder for `Session` objects.
@@ -41,6 +150,7 @@ pub type Result<A> = std::result::Result<A, error::Error>;
 /// functions (both regular and aggregate), event types, and custom types,
 /// before building an `EventQL` parsing session.
 pub struct SessionBuilder {
+    arena: Arena,
     options: AnalysisOptions,
 }
 
@@ -55,7 +165,12 @@ impl SessionBuilder {
     /// * `name` - The name of the function.
     /// * `args` - The arguments the function accepts, which can be converted into `FunArgs`.
     /// * `result` - The return type of the function.
-    pub fn declare_func(self, name: &str, args: impl Into<FunArgs>, result: Type) -> Self {
+    pub fn declare_func<'a>(
+        self,
+        name: &'a str,
+        args: impl Into<FunArgsBuilder<'a>>,
+        result: Type,
+    ) -> Self {
         self.declare_func_when(true, name, args, result)
     }
 
@@ -71,19 +186,25 @@ impl SessionBuilder {
     /// * `name` - The name of the function.
     /// * `args` - The arguments the function accepts, which can be converted into `FunArgs`.
     /// * `result` - The return type of the function.
-    pub fn declare_func_when(
+    pub fn declare_func_when<'a>(
         mut self,
         test: bool,
-        name: &str,
-        args: impl Into<FunArgs>,
+        name: &'a str,
+        args: impl Into<FunArgsBuilder<'a>>,
         result: Type,
     ) -> Self {
         if test {
+            let builder = args.into();
+            let args = self.arena.types.alloc_args(builder.args);
+
             self.options.default_scope.entries.insert(
                 name,
                 Type::App {
-                    args: args.into(),
-                    result: Box::new(result),
+                    args: FunArgs {
+                        values: args,
+                        needed: builder.required,
+                    },
+                    result: self.arena.types.register_type(result),
                     aggregate: false,
                 },
             );
@@ -102,7 +223,12 @@ impl SessionBuilder {
     /// * `name` - The name of the aggregate function.
     /// * `args` - The arguments the aggregate function accepts.
     /// * `result` - The return type of the aggregate function.
-    pub fn declare_agg_func(self, name: &str, args: impl Into<FunArgs>, result: Type) -> Self {
+    pub fn declare_agg_func<'a>(
+        self,
+        name: &'a str,
+        args: impl Into<FunArgsBuilder<'a>>,
+        result: Type,
+    ) -> Self {
         self.declare_agg_func_when(true, name, args, result)
     }
 
@@ -117,19 +243,25 @@ impl SessionBuilder {
     /// * `name` - The name of the aggregate function.
     /// * `args` - The arguments the aggregate function accepts.
     /// * `result` - The return type of the aggregate function.
-    pub fn declare_agg_func_when(
+    pub fn declare_agg_func_when<'a>(
         mut self,
         test: bool,
-        name: &str,
-        args: impl Into<FunArgs>,
+        name: &'a str,
+        args: impl Into<FunArgsBuilder<'a>>,
         result: Type,
     ) -> Self {
         if test {
+            let builder = args.into();
+            let args = self.arena.types.alloc_args(builder.args);
+
             self.options.default_scope.entries.insert(
                 name,
                 Type::App {
-                    args: args.into(),
-                    result: Box::new(result),
+                    args: FunArgs {
+                        values: args,
+                        needed: builder.required,
+                    },
+                    result: self.arena.types.register_type(result),
                     aggregate: true,
                 },
             );
@@ -164,9 +296,8 @@ impl SessionBuilder {
     /// # Arguments
     ///
     /// * `tpe` - The `Type` representing the structure of event records.
-    pub fn declare_event_type(mut self, tpe: Type) -> Self {
-        self.options.event_type_info = tpe;
-        self
+    pub fn declare_event_type(self) -> EventTypeBuilder {
+        EventTypeBuilder { parent: self }
     }
 
     /// Conditionally declares a custom type that can be used in EQL queries.
@@ -212,88 +343,91 @@ impl SessionBuilder {
     /// `declare_func` and `declare_agg_func` for all standard library functions,
     /// and `declare_event_type` for the default event structure.
     pub fn use_stdlib(self) -> Self {
-        self.declare_func("ABS", vec![Type::Number], Type::Number)
-            .declare_func("CEIL", vec![Type::Number], Type::Number)
-            .declare_func("FLOOR", vec![Type::Number], Type::Number)
-            .declare_func("ROUND", vec![Type::Number], Type::Number)
-            .declare_func("COS", vec![Type::Number], Type::Number)
-            .declare_func("EXP", vec![Type::Number], Type::Number)
-            .declare_func("POW", vec![Type::Number, Type::Number], Type::Number)
-            .declare_func("SQRT", vec![Type::Number], Type::Number)
-            .declare_func("RAND", vec![], Type::Number)
-            .declare_func("PI", vec![Type::Number], Type::Number)
-            .declare_func("LOWER", vec![Type::String], Type::String)
-            .declare_func("UPPER", vec![Type::String], Type::String)
-            .declare_func("TRIM", vec![Type::String], Type::String)
-            .declare_func("LTRIM", vec![Type::String], Type::String)
-            .declare_func("RTRIM", vec![Type::String], Type::String)
-            .declare_func("LEN", vec![Type::String], Type::Number)
-            .declare_func("INSTR", vec![Type::String], Type::Number)
+        self.declare_func("ABS", &[Type::Number], Type::Number)
+            .declare_func("CEIL", &[Type::Number], Type::Number)
+            .declare_func("FLOOR", &[Type::Number], Type::Number)
+            .declare_func("ROUND", &[Type::Number], Type::Number)
+            .declare_func("COS", &[Type::Number], Type::Number)
+            .declare_func("EXP", &[Type::Number], Type::Number)
+            .declare_func("POW", &[Type::Number, Type::Number], Type::Number)
+            .declare_func("SQRT", &[Type::Number], Type::Number)
+            .declare_func("RAND", &[], Type::Number)
+            .declare_func("PI", &[Type::Number], Type::Number)
+            .declare_func("LOWER", &[Type::String], Type::String)
+            .declare_func("UPPER", &[Type::String], Type::String)
+            .declare_func("TRIM", &[Type::String], Type::String)
+            .declare_func("LTRIM", &[Type::String], Type::String)
+            .declare_func("RTRIM", &[Type::String], Type::String)
+            .declare_func("LEN", &[Type::String], Type::Number)
+            .declare_func("INSTR", &[Type::String], Type::Number)
             .declare_func(
                 "SUBSTRING",
-                vec![Type::String, Type::Number, Type::Number],
+                &[Type::String, Type::Number, Type::Number],
                 Type::String,
             )
             .declare_func(
                 "REPLACE",
-                vec![Type::String, Type::String, Type::String],
+                &[Type::String, Type::String, Type::String],
                 Type::String,
             )
-            .declare_func("STARTSWITH", vec![Type::String, Type::String], Type::Bool)
-            .declare_func("ENDSWITH", vec![Type::String, Type::String], Type::Bool)
-            .declare_func("NOW", vec![], Type::DateTime)
-            .declare_func("YEAR", vec![Type::Date], Type::Number)
-            .declare_func("MONTH", vec![Type::Date], Type::Number)
-            .declare_func("DAY", vec![Type::Date], Type::Number)
-            .declare_func("HOUR", vec![Type::Time], Type::Number)
-            .declare_func("MINUTE", vec![Type::Time], Type::Number)
-            .declare_func("SECOND", vec![Type::Time], Type::Number)
-            .declare_func("WEEKDAY", vec![Type::Date], Type::Number)
+            .declare_func("STARTSWITH", &[Type::String, Type::String], Type::Bool)
+            .declare_func("ENDSWITH", &[Type::String, Type::String], Type::Bool)
+            .declare_func("NOW", &[], Type::DateTime)
+            .declare_func("YEAR", &[Type::Date], Type::Number)
+            .declare_func("MONTH", &[Type::Date], Type::Number)
+            .declare_func("DAY", &[Type::Date], Type::Number)
+            .declare_func("HOUR", &[Type::Time], Type::Number)
+            .declare_func("MINUTE", &[Type::Time], Type::Number)
+            .declare_func("SECOND", &[Type::Time], Type::Number)
+            .declare_func("WEEKDAY", &[Type::Date], Type::Number)
             .declare_func(
                 "IF",
-                vec![Type::Bool, Type::Unspecified, Type::Unspecified],
+                &[Type::Bool, Type::Unspecified, Type::Unspecified],
                 Type::Unspecified,
             )
             .declare_agg_func(
                 "COUNT",
-                FunArgs {
-                    values: vec![Type::Bool],
-                    needed: 0,
+                FunArgsBuilder {
+                    args: &[Type::Bool],
+                    required: 0,
                 },
                 Type::Number,
             )
-            .declare_agg_func("SUM", vec![Type::Number], Type::Number)
-            .declare_agg_func("AVG", vec![Type::Number], Type::Number)
-            .declare_agg_func("MIN", vec![Type::Number], Type::Number)
-            .declare_agg_func("MAX", vec![Type::Number], Type::Number)
-            .declare_agg_func("MEDIAN", vec![Type::Number], Type::Number)
-            .declare_agg_func("STDDEV", vec![Type::Number], Type::Number)
-            .declare_agg_func("VARIANCE", vec![Type::Number], Type::Number)
-            .declare_agg_func("UNIQUE", vec![Type::Unspecified], Type::Unspecified)
-            .declare_event_type(Type::Record(FxHashMap::from_iter([
-                ("specversion".to_owned(), Type::String),
-                ("id".to_owned(), Type::String),
-                ("time".to_owned(), Type::DateTime),
-                ("source".to_owned(), Type::String),
-                ("subject".to_owned(), Type::Subject),
-                ("type".to_owned(), Type::String),
-                ("datacontenttype".to_owned(), Type::String),
-                ("data".to_owned(), Type::Unspecified),
-                ("predecessorhash".to_owned(), Type::String),
-                ("hash".to_owned(), Type::String),
-                ("traceparent".to_owned(), Type::String),
-                ("tracestate".to_owned(), Type::String),
-                ("signature".to_owned(), Type::String),
-            ])))
+            .declare_agg_func("SUM", &[Type::Number], Type::Number)
+            .declare_agg_func("AVG", &[Type::Number], Type::Number)
+            .declare_agg_func("MIN", &[Type::Number], Type::Number)
+            .declare_agg_func("MAX", &[Type::Number], Type::Number)
+            .declare_agg_func("MEDIAN", &[Type::Number], Type::Number)
+            .declare_agg_func("STDDEV", &[Type::Number], Type::Number)
+            .declare_agg_func("VARIANCE", &[Type::Number], Type::Number)
+            .declare_agg_func("UNIQUE", &[Type::Unspecified], Type::Unspecified)
+            .declare_event_type()
+            .record()
+            .prop("specversion", Type::String)
+            .prop("id", Type::String)
+            .prop("time", Type::DateTime)
+            .prop("source", Type::String)
+            .prop("subject", Type::Subject)
+            .prop("type", Type::String)
+            .prop("datacontenttype", Type::String)
+            .prop("data", Type::Unspecified)
+            .prop("predecessorhash", Type::String)
+            .prop("hash", Type::String)
+            .prop("traceparent", Type::String)
+            .prop("tracestate", Type::String)
+            .prop("signature", Type::String)
+            .build()
     }
 
     /// Builds the `Session` object with the configured analysis options.
     ///
     /// This consumes the `SessionBuilder` and returns a `Session` instance
     /// ready for tokenizing, parsing, and analyzing EventQL queries.
-    pub fn build(self) -> Session {
+    pub fn build(mut self) -> Session {
+        self.arena.types.freeze();
+
         Session {
-            arena: ExprArena::default(),
+            arena: self.arena,
             options: self.options,
         }
     }
@@ -302,6 +436,7 @@ impl SessionBuilder {
 impl Default for SessionBuilder {
     fn default() -> Self {
         Self {
+            arena: Default::default(),
             options: AnalysisOptions::empty(),
         }
     }
@@ -312,7 +447,7 @@ impl Default for SessionBuilder {
 /// It holds the necessary context, such as the expression arena and analysis options,
 /// to perform lexical analysis, parsing, and static analysis of EQL query strings.
 pub struct Session {
-    arena: ExprArena,
+    arena: Arena,
     options: AnalysisOptions,
 }
 
@@ -387,7 +522,49 @@ impl Session {
     /// # Returns
     ///
     /// Returns a typed query on success, or an `AnalysisError` if type checking fails.
-    pub fn run_static_analysis(&self, query: Query<Raw>) -> Result<Query<Typed>> {
-        Ok(static_analysis(&self.arena, &self.options, query)?)
+    pub fn run_static_analysis(&mut self, query: Query<Raw>) -> Result<Query<Typed>> {
+        let mut analysis = self.analysis();
+        Ok(analysis.analyze_query(query)?)
+    }
+
+    /// Converts a type name string to its corresponding [`Type`] variant.
+    ///
+    /// This function performs case-insensitive matching for built-in type names and checks
+    /// against custom types defined in the analysis options.
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Type)` - If the name matches a built-in type or custom type
+    /// * `None` - If the name doesn't match any known type
+    ///
+    /// # Built-in Type Mappings
+    ///
+    /// The following type names are recognized (case-insensitive):
+    /// - `"string"` → [`Type::String`]
+    /// - `"int"` or `"float64"` → [`Type::Number`]
+    /// - `"boolean"` → [`Type::Bool`]
+    /// - `"date"` → [`Type::Date`]
+    /// - `"time"` → [`Type::Time`]
+    /// - `"datetime"` → [`Type::DateTime`]
+    pub fn get_type_from_name(&mut self, name: &str) -> Option<Type> {
+        let str_ref = self.arena.strings.alloc(name);
+        name_to_type(&self.arena, &self.options, str_ref)
+    }
+
+    /// Provides human-readable string formatting for types.
+    ///
+    /// Function types display optional parameters with a `?` suffix. For example,
+    /// a function with signature `(boolean, number?) -> string` accepts 1 or 2 arguments.
+    /// Aggregate functions use `=>` instead of `->` in their signature.
+    pub fn display_type(&self, tpe: &Type) -> String {
+        display_type(&self.arena, *tpe)
+    }
+
+    /// Creates an [`Analysis`] instance for fine-grained control over static analysis.
+    ///
+    /// Use this when you need to analyze individual expressions or manage scopes manually,
+    /// rather than using [`run_static_analysis`](Session::run_static_analysis) for whole queries.
+    pub fn analysis(&mut self) -> Analysis<'_> {
+        Analysis::new(&mut self.arena, &self.options)
     }
 }

@@ -11,18 +11,10 @@
 //! - [`Value`] - The various kinds of expression values (literals, operators, etc.)
 //! - [`Source`] - Data sources in FROM clauses
 //!
-use crate::{
-    error::AnalysisError,
-    token::{Operator, Token},
-};
+use crate::token::{Operator, Token};
 use ordered_float::OrderedFloat;
-use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
-use std::{
-    fmt::{self, Display},
-    mem,
-};
 
 /// Position information for source code locations.
 ///
@@ -55,417 +47,6 @@ impl From<Token<'_>> for Pos {
     }
 }
 
-/// Represents function argument types with optional parameter support.
-///
-/// This type allows defining functions that have both required and optional parameters.
-/// The `needed` field specifies how many arguments are required, while `values` contains
-/// all possible argument types (both required and optional).
-///
-/// # Examples
-///
-/// ```
-/// use eventql_parser::prelude::{FunArgs, Type};
-///
-/// // Function with all required parameters: (number, string)
-/// let required = FunArgs::required(vec![Type::Number, Type::String]);
-/// assert_eq!(required.needed, 2);
-/// assert_eq!(required.values.len(), 2);
-///
-/// // Function with optional parameters: (boolean, number?)
-/// let optional = FunArgs {
-///     values: vec![Type::Bool, Type::Number],
-///     needed: 1, // Only first parameter is required
-/// };
-/// assert!(optional.match_arg_count(1)); // Can call with just boolean
-/// assert!(optional.match_arg_count(2)); // Can call with both
-/// assert!(!optional.match_arg_count(3)); // Cannot call with 3 args
-/// ```
-#[derive(Debug, Serialize, Clone)]
-pub struct FunArgs {
-    /// All argument types, including both required and optional parameters
-    pub values: Vec<Type>,
-    /// Number of required arguments (must be <= values.len())
-    pub needed: usize,
-}
-
-impl FunArgs {
-    /// Creates a new `FunArgs` where all parameters are required.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::prelude::{FunArgs, Type};
-    ///
-    /// let args = FunArgs::required(vec![Type::Number, Type::String]);
-    /// assert_eq!(args.needed, 2);
-    /// assert_eq!(args.values.len(), 2);
-    /// ```
-    pub fn required(args: Vec<Type>) -> Self {
-        Self {
-            needed: args.len(),
-            values: args,
-        }
-    }
-
-    /// Returns `true` if there are no argument types defined.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::prelude::{FunArgs, Type};
-    ///
-    /// let empty = FunArgs::required(vec![]);
-    /// assert!(empty.is_empty());
-    ///
-    /// let not_empty = FunArgs::required(vec![Type::Number]);
-    /// assert!(!not_empty.is_empty());
-    /// ```
-    pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
-    }
-
-    /// Checks if a given argument count is valid for this function signature.
-    ///
-    /// Returns `true` if the count is between `needed` (inclusive) and
-    /// `values.len()` (inclusive), meaning all required arguments are
-    /// provided and no extra arguments beyond the optional ones are given.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::prelude::{FunArgs, Type};
-    ///
-    /// let args = FunArgs {
-    ///     values: vec![Type::Bool, Type::Number, Type::String],
-    ///     needed: 1, // Only first parameter is required
-    /// };
-    ///
-    /// assert!(!args.match_arg_count(0)); // Missing required argument
-    /// assert!(args.match_arg_count(1));  // Required argument provided
-    /// assert!(args.match_arg_count(2));  // Required + one optional
-    /// assert!(args.match_arg_count(3));  // All arguments provided
-    /// assert!(!args.match_arg_count(4)); // Too many arguments
-    /// ```
-    pub fn match_arg_count(&self, cnt: usize) -> bool {
-        cnt >= self.needed && cnt <= self.values.len()
-    }
-}
-
-impl From<Vec<Type>> for FunArgs {
-    fn from(value: Vec<Type>) -> Self {
-        Self::required(value)
-    }
-}
-
-/// Type information for expressions.
-///
-/// This enum represents the type of an expression in the E
-#[derive(Clone, Debug, Default, Serialize)]
-pub enum Type {
-    /// Type has not been determined yet
-    #[default]
-    Unspecified,
-    /// Numeric type (f64)
-    Number,
-    /// String type
-    String,
-    /// Boolean type
-    Bool,
-    /// Array type
-    Array(Box<Type>),
-    /// Record (object) type
-    Record(FxHashMap<String, Type>),
-    /// Subject pattern type
-    Subject,
-    /// Function type with support for optional parameters.
-    ///
-    /// The `args` field uses [`FunArgs`] to support both required and optional parameters.
-    /// Optional parameters are indicated when `args.needed < args.values.len()`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::prelude::{Type, FunArgs};
-    ///
-    /// // Function with all required parameters: (number, string) -> boolean
-    /// let all_required = Type::App {
-    ///     args: vec![Type::Number, Type::String].into(),
-    ///     result: Box::new(Type::Bool),
-    ///     aggregate: false,
-    /// };
-    ///
-    /// // Aggregate function with optional parameter: (boolean?) => number
-    /// let with_optional = Type::App {
-    ///     args: FunArgs {
-    ///         values: vec![Type::Bool],
-    ///         needed: 0, // All parameters are optional
-    ///     },
-    ///     result: Box::new(Type::Number),
-    ///     aggregate: true,
-    /// };
-    /// ```
-    App {
-        /// Function argument types, supporting optional parameters
-        args: FunArgs,
-        /// Return type of the function
-        result: Box<Type>,
-        /// Whether this is an aggregate function (operates on grouped data)
-        aggregate: bool,
-    },
-    /// Date type (e.g., `2026-01-03`)
-    ///
-    /// Used when a field is explicitly converted to a date using the `AS DATE` syntax.
-    Date,
-    /// Time type (e.g., `13:45:39`)
-    ///
-    /// Used when a field is explicitly converted to a time using the `AS TIME` syntax.
-    Time,
-    /// DateTime type (e.g., `2026-01-01T13:45:39Z`)
-    ///
-    /// Used when a field is explicitly converted to a datetime using the `AS DATETIME` syntax.
-    DateTime,
-    /// Custom type not defined in the EventQL reference
-    ///
-    /// Used when a field is converted to a custom type registered in [`AnalysisOptions::custom_types`].
-    /// The string contains the custom type name as it appears in the query.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::Session;
-    ///
-    /// let mut session = Session::builder()
-    ///     .declare_custom_type("CustomTimestamp")
-    ///     .build();
-    /// let query = session.parse("FROM e IN events PROJECT INTO { ts: e.data.timestamp as CustomTimestamp }").unwrap();
-    /// let typed_query = session.run_static_analysis(query).unwrap();
-    /// ```
-    Custom(String),
-}
-
-/// Provides human-readable string formatting for types.
-///
-/// Function types display optional parameters with a `?` suffix. For example,
-/// a function with signature `(boolean, number?) -> string` accepts 1 or 2 arguments.
-/// Aggregate functions use `=>` instead of `->` in their signature.
-///
-/// # Examples
-///
-/// ```
-/// use eventql_parser::prelude::{Type, FunArgs};
-///
-/// // Basic types
-/// assert_eq!(Type::Number.to_string(), "number");
-/// assert_eq!(Type::String.to_string(), "string");
-/// assert_eq!(Type::Bool.to_string(), "boolean");
-///
-/// // Array type
-/// let arr = Type::Array(Box::new(Type::Number));
-/// assert_eq!(arr.to_string(), "[]number");
-///
-/// // Function with all required parameters
-/// let func = Type::App {
-///     args: vec![Type::Number, Type::String].into(),
-///     result: Box::new(Type::Bool),
-///     aggregate: false,
-/// };
-/// assert_eq!(func.to_string(), "(number, string) -> boolean");
-///
-/// // Function with optional parameters
-/// let func_optional = Type::App {
-///     args: FunArgs {
-///         values: vec![Type::Bool, Type::Number],
-///         needed: 1,
-///     },
-///     result: Box::new(Type::String),
-///     aggregate: false,
-/// };
-/// assert_eq!(func_optional.to_string(), "(boolean, number?) -> string");
-///
-/// // Aggregate function
-/// let agg = Type::App {
-///     args: vec![Type::Number].into(),
-///     result: Box::new(Type::Number),
-///     aggregate: true,
-/// };
-/// assert_eq!(agg.to_string(), "(number) => number");
-/// ```
-impl Display for Type {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Type::Unspecified => write!(f, "any"),
-            Type::Number => write!(f, "number"),
-            Type::String => write!(f, "string"),
-            Type::Bool => write!(f, "boolean"),
-            Type::Array(tpe) => write!(f, "[]{tpe}"),
-            Type::Record(map) => {
-                write!(f, "{{ ")?;
-
-                for (idx, (name, value)) in map.iter().enumerate() {
-                    if idx != 0 {
-                        write!(f, ", ")?;
-                    }
-
-                    write!(f, "{name}: {value}")?;
-                }
-
-                write!(f, " }}")
-            }
-            Type::Subject => write!(f, "subject"),
-            Type::App {
-                args,
-                result,
-                aggregate,
-            } => {
-                write!(f, "(")?;
-
-                for (idx, arg) in args.values.iter().enumerate() {
-                    if idx != 0 {
-                        write!(f, ", ")?;
-                    }
-
-                    write!(f, "{arg}")?;
-
-                    if idx + 1 > args.needed {
-                        write!(f, "?")?;
-                    }
-                }
-
-                write!(f, ")")?;
-
-                if *aggregate {
-                    write!(f, " => ")?;
-                } else {
-                    write!(f, " -> ")?;
-                }
-
-                write!(f, "{result}")
-            }
-            Type::Date => write!(f, "date"),
-            Type::Time => write!(f, "time"),
-            Type::DateTime => write!(f, "datetime"),
-            Type::Custom(n) => write!(f, "{}", n.to_lowercase()),
-        }
-    }
-}
-
-impl Type {
-    pub fn as_record_or_panic_mut(&mut self) -> &mut FxHashMap<String, Type> {
-        if let Self::Record(r) = self {
-            return r;
-        }
-
-        panic!("expected record type, got {:?}", self);
-    }
-
-    /// Checks if two types are the same.
-    ///
-    /// * If `self` is `Type::Unspecified` then `self` is updated to the more specific `Type`.
-    /// * If `self` is `Type::Subject` and is checked against a `Type::String` then `self` is updated to `Type::String`
-    pub fn check(self, attrs: Attrs, other: Type) -> Result<Type, AnalysisError> {
-        match (self, other) {
-            (Self::Unspecified, other) => Ok(other),
-            (this, Self::Unspecified) => Ok(this),
-            (Self::Subject, Self::Subject) => Ok(Self::Subject),
-
-            // Subjects are strings so there is no reason to reject a type
-            // when compared to a string. However, when it happens, we demote
-            // a subject to a string.
-            (Self::Subject, Self::String) => Ok(Self::String),
-            (Self::String, Self::Subject) => Ok(Self::String),
-
-            (Self::Number, Self::Number) => Ok(Self::Number),
-            (Self::String, Self::String) => Ok(Self::String),
-            (Self::Bool, Self::Bool) => Ok(Self::Bool),
-            (Self::Date, Self::Date) => Ok(Self::Date),
-            (Self::Time, Self::Time) => Ok(Self::Time),
-            (Self::DateTime, Self::DateTime) => Ok(Self::DateTime),
-
-            // `DateTime` can be implicitly cast to `Date` or `Time`
-            (Self::DateTime, Self::Date) => Ok(Self::Date),
-            (Self::Date, Self::DateTime) => Ok(Self::Date),
-            (Self::DateTime, Self::Time) => Ok(Self::Time),
-            (Self::Time, Self::DateTime) => Ok(Self::Time),
-            (Self::Custom(a), Self::Custom(b)) if a.eq_ignore_ascii_case(b.as_str()) => {
-                Ok(Self::Custom(a))
-            }
-            (Self::Array(mut a), Self::Array(b)) => {
-                *a = a.as_ref().clone().check(attrs, *b)?;
-                Ok(Self::Array(a))
-            }
-
-            (Self::Record(mut a), Self::Record(b)) if a.len() == b.len() => {
-                if a.is_empty() {
-                    return Ok(Self::Record(a));
-                }
-
-                for bk in b.keys() {
-                    if !a.contains_key(bk) {
-                        return Err(AnalysisError::TypeMismatch(
-                            attrs.pos.line,
-                            attrs.pos.col,
-                            Self::Record(a),
-                            Self::Record(b),
-                        ));
-                    }
-                }
-
-                for (bk, bv) in b.into_iter() {
-                    let av = a.get_mut(&bk).unwrap();
-                    let a = mem::take(av);
-                    *av = a.check(attrs, bv)?;
-                }
-
-                Ok(Self::Record(a))
-            }
-
-            (
-                Self::App {
-                    args: mut a_args,
-                    result: mut a_res,
-                    aggregate: a_agg,
-                },
-                Self::App {
-                    args: b_args,
-                    result: b_res,
-                    aggregate: b_agg,
-                },
-            ) if a_args.values.len() == b_args.values.len() && a_agg == b_agg => {
-                if a_args.is_empty() {
-                    let tmp = mem::take(a_res.as_mut());
-                    *a_res = tmp.check(attrs, *b_res)?;
-                    return Ok(Self::App {
-                        args: a_args,
-                        result: a_res,
-                        aggregate: a_agg,
-                    });
-                }
-
-                for (a, b) in a_args.values.iter_mut().zip(b_args.values.into_iter()) {
-                    let tmp = mem::take(a);
-                    *a = tmp.check(attrs, b)?;
-                }
-
-                let tmp = mem::take(a_res.as_mut());
-                *a_res = tmp.check(attrs, *b_res)?;
-
-                Ok(Self::App {
-                    args: a_args,
-                    result: a_res,
-                    aggregate: a_agg,
-                })
-            }
-
-            (this, other) => Err(AnalysisError::TypeMismatch(
-                attrs.pos.line,
-                attrs.pos.col,
-                this,
-                other,
-            )),
-        }
-    }
-}
-
 /// Attributes attached to each expression node.
 ///
 /// These attributes provide metadata about an expression, including its
@@ -489,6 +70,18 @@ impl<'a> From<Token<'a>> for Attrs {
     }
 }
 
+/// A reference to a string stored in the [`StringArena`](crate::arena::StringArena).
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
+pub struct StrRef(pub(crate) usize);
+
+/// A reference to a vector of expressions stored in the [`ExprArena`](crate::arena::ExprArena).
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
+pub struct VecRef(pub(crate) usize);
+
+/// A reference to a vector of record fields stored in the [`ExprArena`](crate::arena::ExprArena).
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
+pub struct RecRef(pub(crate) usize);
+
 /// Internal pointer to an expression in the arena.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Serialize)]
 pub struct ExprPtr(pub(crate) usize);
@@ -497,7 +90,7 @@ pub struct ExprPtr(pub(crate) usize);
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 pub struct ExprKey(pub(crate) u64);
 
-/// A reference to an expression stored in an [`ExprArena`].
+/// A reference to an expression stored in an [`ExprArena`](crate::arena::ExprArena).
 ///
 /// This is a lightweight handle that combines a hash key for fast comparison
 /// and a pointer for fast lookup.
@@ -513,25 +106,6 @@ impl Hash for ExprRef {
     }
 }
 
-/// An expression with metadata.
-///
-/// This is the fundamental building block of the AST. Every expression
-/// carries attributes (position, scope, type) and a value that determines
-/// what kind of expression it is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub struct Expr {
-    /// Metadata about this expression
-    pub attrs: Attrs,
-    /// The value/kind of this expression
-    pub node_ref: ExprRef,
-}
-
-impl Hash for Expr {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.node_ref.hash(state);
-    }
-}
-
 /// Field access expression (e.g., `e.data.price`).
 ///
 /// Represents accessing a field of a record or object using dot notation.
@@ -541,12 +115,12 @@ impl Hash for Expr {
 ///
 /// In the query `WHERE e.data.user.id == 1`, the expression `e.data.user.id`
 /// is parsed as nested `Access` nodes.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct Access {
     /// The target expression being accessed
     pub target: ExprRef,
     /// The name of the field being accessed
-    pub field: String,
+    pub field: StrRef,
 }
 
 /// Function application (e.g., `sum(e.price)`, `count()`).
@@ -556,23 +130,23 @@ pub struct Access {
 /// # Examples
 ///
 /// In the query `WHERE count(e.items) > 5`, the `count(e.items)` is an `App` node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct App {
     /// Name of the function being called
-    pub func: String,
+    pub func: StrRef,
     /// Arguments passed to the function
-    pub args: Vec<ExprRef>,
+    pub args: VecRef,
 }
 
 /// A field in a record literal (e.g., `{name: "Alice", age: 30}`).
 ///
 /// Represents a key-value pair in a record construction.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct Field {
     /// Field attributes
     pub attrs: Attrs,
     /// Field name
-    pub name: String,
+    pub name: StrRef,
     /// Field value expression
     pub expr: ExprRef,
 }
@@ -615,20 +189,20 @@ pub struct Unary {
 ///
 /// This enum contains all the different types of expressions that can appear
 /// in an EventQL query, from simple literals to complex operations.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum Value {
     /// Numeric literal (e.g., `42`, `3.14`)
     Number(OrderedFloat<f64>),
     /// String literal (e.g., `"hello"`)
-    String(String),
+    String(StrRef),
     /// Boolean literal (`true` or `false`)
     Bool(bool),
     /// Identifier (e.g., variable name `e`, `x`)
-    Id(String),
+    Id(StrRef),
     /// Array literal (e.g., `[1, 2, 3]`)
-    Array(Vec<ExprRef>),
+    Array(VecRef),
     /// Record literal (e.g., `{name: "Alice", age: 30}`)
-    Record(Vec<Field>),
+    Record(RecRef),
     /// Field access (e.g., `e.data.price`)
     Access(Access),
     /// Function application (e.g., `sum(e.price)`)

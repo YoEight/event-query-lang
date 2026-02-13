@@ -1,8 +1,5 @@
-use crate::{
-    Session, Type,
-    parser::Parser,
-    prelude::{Analysis, AnalysisContext},
-};
+use crate::typing::analysis::AnalysisContext;
+use crate::{Session, Type, parser::Parser};
 
 #[test]
 fn test_infer_wrong_where_clause_1() {
@@ -207,12 +204,13 @@ fn test_typecheck_datetime_contravariance_1() {
         .parse_expr()
         .unwrap();
 
-    let mut analysis = Analysis::new(&session.arena, &session.options);
+    let event_type = session.options.event_type_info;
+    let mut analysis = session.analysis();
 
     analysis
         .scope_mut()
         .entries
-        .insert("e".to_string(), session.options.event_type_info.clone());
+        .insert("e".to_string(), event_type);
 
     // `e.time` is a `Type::DateTime` but it will typecheck if a `Type::Date` is expected
     insta::assert_yaml_snapshot!(analysis.analyze_expr(
@@ -230,7 +228,7 @@ fn test_typecheck_datetime_contravariance_2() {
         .parse_expr()
         .unwrap();
 
-    let mut analysis = Analysis::new(&session.arena, &session.options);
+    let mut analysis = session.analysis();
 
     // `NOW()` is a `Type::DateTime` but it will typecheck if a `Type::Time` is expected
     insta::assert_yaml_snapshot!(analysis.analyze_expr(
@@ -248,7 +246,7 @@ fn test_typecheck_datetime_contravariance_3() {
         .parse_expr()
         .unwrap();
 
-    let mut analysis = Analysis::new(&session.arena, &session.options);
+    let mut analysis = session.analysis();
 
     insta::assert_yaml_snapshot!(analysis.analyze_expr(
         &mut AnalysisContext::default(),
@@ -265,7 +263,7 @@ fn test_typecheck_datetime_contravariance_4() {
         .parse_expr()
         .unwrap();
 
-    let mut analysis = Analysis::new(&session.arena, &session.options);
+    let mut analysis = session.analysis();
 
     insta::assert_yaml_snapshot!(analysis.analyze_expr(
         &mut AnalysisContext::default(),

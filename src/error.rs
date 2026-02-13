@@ -4,7 +4,7 @@
 //! and parsing of EventQL queries. All errors include position information
 //! (line and column numbers) to help diagnose issues in query strings.
 
-use crate::{Type, token::Symbol};
+use crate::token::Symbol;
 use serde::Serialize;
 use thiserror::Error;
 
@@ -59,6 +59,9 @@ pub enum ParserError {
     #[error("{0}:{1}: expected identifier but got {2}")]
     ExpectedIdent(u32, u32, String),
 
+    /// The query is missing a required FROM statement.
+    ///
+    /// Fields: `(line, column)`
     #[error("{0}:{1}: missing FROM statement")]
     MissingFromStatement(u32, u32),
 
@@ -132,7 +135,7 @@ pub enum AnalysisError {
     /// This occurs when an expression has a different type than what is
     /// required by its context (e.g., using a string where a number is expected).
     #[error("{0}:{1}: type mismatch: expected {2} but got {3} ")]
-    TypeMismatch(u32, u32, Type, Type),
+    TypeMismatch(u32, u32, String, String),
 
     /// A record field was accessed but doesn't exist in the record type.
     ///
@@ -159,7 +162,7 @@ pub enum AnalysisError {
     /// This occurs when a record type is required (e.g., for field access)
     /// but a different type was found.
     #[error("{0}:{1}: expected record but got {2}")]
-    ExpectRecord(u32, u32, Type),
+    ExpectRecord(u32, u32, String),
 
     /// Expected a record or sourced-property but found a different type.
     ///
@@ -168,7 +171,7 @@ pub enum AnalysisError {
     /// This occurs when checking a projection and the static analysis found
     /// out the project into clause doesn't return a record nor a sourced-based property.
     #[error("{0}:{1}: expected a record or a sourced-property but got {2}")]
-    ExpectRecordOrSourcedProperty(u32, u32, Type),
+    ExpectRecordOrSourcedProperty(u32, u32, String),
 
     /// Expected an array type but found a different type.
     ///
@@ -176,7 +179,7 @@ pub enum AnalysisError {
     ///
     /// This occurs when an array type is required but a different type was found.
     #[error("{0}:{1}: expected an array but got {2}")]
-    ExpectArray(u32, u32, Type),
+    ExpectArray(u32, u32, String),
 
     /// Expected a field literal but found a different expression.
     ///
