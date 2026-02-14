@@ -270,7 +270,7 @@ pub enum SourceKind<A> {
 /// In `ORDER BY e.timestamp DESC`, this would be represented as:
 /// - `expr`: expression for `e.timestamp`
 /// - `order`: `Order::Desc`
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct OrderBy {
     /// Expression to sort by
     pub expr: ExprRef,

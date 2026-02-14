@@ -16,7 +16,7 @@ mod typing;
 use crate::arena::Arena;
 use crate::lexer::tokenize;
 use crate::prelude::{
-    Analysis, AnalysisOptions, FunArgs, Typed, display_type, name_to_type, parse,
+    Analysis, AnalysisOptions, FunArgs, Scope, Typed, display_type, name_to_type, parse,
 };
 use crate::token::Token;
 pub use ast::*;
@@ -550,8 +550,8 @@ impl Session {
     /// - `"date"` → [`Type::Date`]
     /// - `"time"` → [`Type::Time`]
     /// - `"datetime"` → [`Type::DateTime`]
-    pub fn get_type_from_name(&mut self, name: &str) -> Option<Type> {
-        let str_ref = self.arena.strings.alloc(name);
+    pub fn get_type_from_name(&self, name: &str) -> Option<Type> {
+        let str_ref = self.arena.strings.str_ref(name)?;
         name_to_type(&self.arena, &self.options, str_ref)
     }
 
@@ -560,8 +560,8 @@ impl Session {
     /// Function types display optional parameters with a `?` suffix. For example,
     /// a function with signature `(boolean, number?) -> string` accepts 1 or 2 arguments.
     /// Aggregate functions use `=>` instead of `->` in their signature.
-    pub fn display_type(&self, tpe: &Type) -> String {
-        display_type(&self.arena, *tpe)
+    pub fn display_type(&self, tpe: Type) -> String {
+        display_type(&self.arena, tpe)
     }
 
     /// Creates an [`Analysis`] instance for fine-grained control over static analysis.
@@ -580,5 +580,10 @@ impl Session {
     /// Returns a mutable reference to the underlying [`Arena`].
     pub fn arena_mut(&mut self) -> &mut Arena {
         &mut self.arena
+    }
+
+    /// Returns the global [`Scope`]
+    pub fn global_scope(&self) -> &Scope {
+        &self.options.default_scope
     }
 }
