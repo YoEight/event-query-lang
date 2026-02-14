@@ -365,6 +365,11 @@ impl Arena {
         self.exprs.rec(key)
     }
 
+    /// Returns the map of type record fields for the given type [`Record`]
+    pub fn get_type_rec(&self, key: Record) -> &FxHashMap<StrRef, Type> {
+        self.types.get_record(key)
+    }
+
     /// Returns the function argument types for the given [`ArgsRef`].
     pub fn get_args(&self, key: ArgsRef) -> &[Type] {
         self.types.get_args(key)
