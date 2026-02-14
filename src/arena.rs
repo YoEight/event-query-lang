@@ -34,6 +34,11 @@ impl StringArena {
         }
     }
 
+    /// If that value has already been interned, it returns the string pointer in the arena.
+    pub fn str_ref(&self, value: &str) -> Option<StrRef> {
+        self.cache.get(&self.hasher.hash_one(value)).copied()
+    }
+
     /// Interns a string using case-insensitive hashing.
     ///
     /// Two strings that differ only in ASCII case will resolve to the same [`StrRef`].
@@ -343,6 +348,11 @@ impl Arena {
     /// Retrieves the interned string associated with the given [`StrRef`].
     pub fn get_str(&self, key: StrRef) -> &str {
         self.strings.get(key)
+    }
+
+    /// If that value has already been interned, it returns the string pointer in the arena.
+    pub fn str_ref(&self, key: &str) -> Option<StrRef> {
+        self.strings.str_ref(key)
     }
 
     /// Retrieves the expression node associated with the given [`ExprRef`].
