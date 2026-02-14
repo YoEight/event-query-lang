@@ -4,13 +4,14 @@ use rustc_hash::{FxBuildHasher, FxHashMap};
 use serde::Serialize;
 use std::collections::hash_map::Entry;
 use std::hash::BuildHasher;
+use std::ops::Range;
 use unicase::Ascii;
 
 /// An arena-based allocator for interning strings.
 ///
 /// Deduplicates strings by hash and returns lightweight [`StrRef`] handles for O(1) lookups.
 #[derive(Default, Serialize)]
-pub struct StringArena {
+pub(crate) struct StringArena {
     #[serde(skip_serializing)]
     hasher: FxBuildHasher,
 
@@ -78,7 +79,7 @@ pub struct Expr {
 /// The `ExprArena` provides a memory-efficient way to store and manage AST nodes
 /// by using a flat vector and returning lightweight [`ExprRef`] handles.
 #[derive(Default, Serialize)]
-pub struct ExprArena {
+pub(crate) struct ExprArena {
     #[serde(skip_serializing)]
     hasher: FxBuildHasher,
     exprs: Vec<Expr>,
@@ -138,13 +139,13 @@ impl ExprArena {
     }
 
     /// Returns an iterator over valid indices for the given [`VecRef`].
-    pub fn vec_idxes(&self, ptr: VecRef) -> impl Iterator<Item = usize> + use<> {
+    pub fn vec_idxes(&self, ptr: VecRef) -> Range<usize> {
         0..self.vec(ptr).len()
     }
 
     /// Returns the vector of fields for the given [`RecRef`].
-    pub fn rec(&self, ptr: RecRef) -> &Vec<Field> {
-        &self.recs[ptr.0]
+    pub fn rec(&self, ptr: RecRef) -> &[Field] {
+        self.recs[ptr.0].as_slice()
     }
 
     /// Returns the field at index `idx` within the given [`RecRef`].
@@ -153,7 +154,7 @@ impl ExprArena {
     }
 
     /// Returns an iterator over valid indices for the given [`RecRef`].
-    pub fn rec_idxes(&self, ptr: RecRef) -> impl Iterator<Item = usize> + use<> {
+    pub fn rec_idxes(&self, ptr: RecRef) -> Range<usize> {
         0..self.rec(ptr).len()
     }
 }
@@ -163,7 +164,7 @@ impl ExprArena {
 /// Stores and deduplicates types, record definitions, and function argument lists.
 /// Supports freezing to mark a baseline and freeing types allocated after the baseline.
 #[derive(Default, Serialize)]
-pub struct TypeArena {
+pub(crate) struct TypeArena {
     #[serde(skip_serializing)]
     args_hasher: FxBuildHasher,
 
@@ -267,11 +268,6 @@ impl TypeArena {
         self.args[key.0].as_slice()
     }
 
-    /// Returns a mutable reference to the argument type slice for the given [`ArgsRef`].
-    pub fn get_args_mut(&mut self, key: ArgsRef) -> &mut [Type] {
-        self.args[key.0].as_mut_slice()
-    }
-
     /// Returns an iterator over valid indices for the given [`ArgsRef`].
     pub fn args_idxes(&self, key: ArgsRef) -> impl Iterator<Item = usize> + use<> {
         0..self.get_args(key).len()
@@ -285,16 +281,6 @@ impl TypeArena {
     /// Returns the type of a field in the given record, or `None` if the field doesn't exist.
     pub fn record_get(&self, record: Record, field: StrRef) -> Option<Type> {
         self.records[record.0].get(&field).copied()
-    }
-
-    /// Iterates over all (field name, type) pairs in the given record.
-    pub fn record_iter(&self, record: Record) -> impl Iterator<Item = (StrRef, Type)> {
-        self.records[record.0].iter().map(|(k, v)| (*k, *v))
-    }
-
-    /// Iterates over all field names in the given record.
-    pub fn record_keys(&self, record: Record) -> impl Iterator<Item = StrRef> {
-        self.records[record.0].keys().copied()
     }
 
     /// Checks whether two records have the exact same set of field names.
@@ -324,16 +310,6 @@ impl TypeArena {
         self.alloc_record(FxHashMap::default())
     }
 
-    /// Returns `true` if the given field exists in the record.
-    pub fn record_field_exists(&self, record: Record, field: StrRef) -> bool {
-        self.records[record.0].contains_key(&field)
-    }
-
-    /// Returns the hash map entry for a field in the given record, for in-place manipulation.
-    pub fn record_entry(&mut self, record: Record, key: StrRef) -> Entry<'_, StrRef, Type> {
-        self.records[record.0].entry(key)
-    }
-
     /// Sets the type of a field in the given record, inserting or updating as needed.
     pub fn record_set(&mut self, record: Record, field: StrRef, value: Type) {
         self.records[record.0].insert(field, value);
@@ -342,11 +318,6 @@ impl TypeArena {
     /// Returns the number of fields in the given record.
     pub fn record_len(&self, record: Record) -> usize {
         self.records[record.0].len()
-    }
-
-    /// Returns `true` if the given record has no fields.
-    pub fn record_is_empty(&self, record: Record) -> bool {
-        self.records[record.0].is_empty()
     }
 }
 
@@ -367,5 +338,35 @@ impl Arena {
     /// Frees types allocated after the last freeze, reclaiming memory for reuse.
     pub fn free_space(&mut self) {
         self.types.free_space();
+    }
+
+    /// Retrieves the interned string associated with the given [`StrRef`].
+    pub fn get_str(&self, key: StrRef) -> &str {
+        self.strings.get(key)
+    }
+
+    /// Retrieves the expression node associated with the given [`ExprRef`].
+    pub fn get_expr(&self, key: ExprRef) -> Expr {
+        self.exprs.get(key)
+    }
+
+    /// Retrieves the type associated with the given [`TypeRef`].
+    pub fn get_type(&self, key: TypeRef) -> Type {
+        self.types.get_type(key)
+    }
+
+    /// Returns the slice of expression references for the given [`VecRef`].
+    pub fn get_vec(&self, key: VecRef) -> &[ExprRef] {
+        self.exprs.vec(key)
+    }
+
+    /// Returns the slice of record fields for the given [`RecRef`].
+    pub fn get_rec(&self, key: RecRef) -> &[Field] {
+        self.exprs.rec(key)
+    }
+
+    /// Returns the function argument types for the given [`ArgsRef`].
+    pub fn get_args(&self, key: ArgsRef) -> &[Type] {
+        self.types.get_args(key)
     }
 }

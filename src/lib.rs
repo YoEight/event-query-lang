@@ -16,11 +16,12 @@ mod typing;
 use crate::arena::Arena;
 use crate::lexer::tokenize;
 use crate::prelude::{
-    Analysis, AnalysisOptions, FunArgs, Type, Typed, display_type, name_to_type, parse,
+    Analysis, AnalysisOptions, FunArgs, Typed, display_type, name_to_type, parse,
 };
 use crate::token::Token;
 pub use ast::*;
 use rustc_hash::FxHashMap;
+pub use typing::Type;
 use unicase::Ascii;
 
 /// Convenience module that re-exports all public types and functions.
@@ -28,6 +29,7 @@ use unicase::Ascii;
 /// This module provides a single import point for all the library's public API,
 /// including AST types, error types, lexer, parser, and token types.
 pub mod prelude {
+    pub use super::arena::*;
     pub use super::ast::*;
     pub use super::error::*;
     pub use super::parser::*;
@@ -568,5 +570,15 @@ impl Session {
     /// rather than using [`run_static_analysis`](Session::run_static_analysis) for whole queries.
     pub fn analysis(&mut self) -> Analysis<'_> {
         Analysis::new(&mut self.arena, &self.options)
+    }
+
+    /// Returns a reference to the underlying [`Arena`].
+    pub fn arena(&self) -> &Arena {
+        &self.arena
+    }
+
+    /// Returns a mutable reference to the underlying [`Arena`].
+    pub fn arena_mut(&mut self) -> &mut Arena {
+        &mut self.arena
     }
 }
