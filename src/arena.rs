@@ -39,13 +39,19 @@ impl StringArena {
         self.cache.get(&self.hasher.hash_one(value)).copied()
     }
 
+    /// Like ['str_ref'] but case-insensitive
+    pub fn str_ref_no_case(&self, value: &str) -> Option<StrRef> {
+        self.cache
+            .get(&self.hasher.hash_one(Ascii::new(value)))
+            .copied()
+    }
+
     /// Interns a string using case-insensitive hashing.
     ///
     /// Two strings that differ only in ASCII case will resolve to the same [`StrRef`].
     /// The original casing of the first insertion is preserved.
     pub fn alloc_no_case(&mut self, value: &str) -> StrRef {
-        let hash = Ascii::new(value);
-        match self.cache.entry(self.hasher.hash_one(hash)) {
+        match self.cache.entry(self.hasher.hash_one(Ascii::new(value))) {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
                 let key = StrRef(self.slots.len());

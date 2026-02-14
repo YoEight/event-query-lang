@@ -16,13 +16,12 @@ mod typing;
 use crate::arena::Arena;
 use crate::lexer::tokenize;
 use crate::prelude::{
-    Analysis, AnalysisOptions, FunArgs, Scope, Typed, display_type, name_to_type, parse,
+    Analysis, AnalysisOptions, FunArgs, Scope, Typed, display_type, parse, resolve_type_from_str,
 };
 use crate::token::Token;
 pub use ast::*;
 use rustc_hash::FxHashMap;
 pub use typing::Type;
-use unicase::Ascii;
 
 /// Convenience module that re-exports all public types and functions.
 ///
@@ -151,6 +150,7 @@ pub type Result<A> = std::result::Result<A, error::Error>;
 /// It allows for the configuration of analysis options, such as declaring
 /// functions (both regular and aggregate), event types, and custom types,
 /// before building an `EventQL` parsing session.
+#[derive(Default)]
 pub struct SessionBuilder {
     arena: Arena,
     options: AnalysisOptions,
@@ -316,9 +316,8 @@ impl SessionBuilder {
     /// * `name` - The name of the custom type.
     pub fn declare_custom_type_when(mut self, test: bool, name: &str) -> Self {
         if test {
-            self.options
-                .custom_types
-                .insert(Ascii::new(name.to_owned()));
+            let name = self.arena.strings.alloc_no_case(name);
+            self.options.custom_types.insert(name);
         }
 
         self
@@ -332,11 +331,8 @@ impl SessionBuilder {
     /// # Arguments
     ///
     /// * `name` - The name of the custom type.
-    pub fn declare_custom_type(mut self, name: &str) -> Self {
-        self.options
-            .custom_types
-            .insert(Ascii::new(name.to_owned()));
-        self
+    pub fn declare_custom_type(self, name: &str) -> Self {
+        self.declare_custom_type_when(true, name)
     }
 
     /// Includes the standard library of functions and event types in the session.
@@ -433,15 +429,6 @@ impl SessionBuilder {
         Session {
             arena: self.arena,
             options: self.options,
-        }
-    }
-}
-
-impl Default for SessionBuilder {
-    fn default() -> Self {
-        Self {
-            arena: Default::default(),
-            options: AnalysisOptions::empty(),
         }
     }
 }
@@ -550,9 +537,10 @@ impl Session {
     /// - `"date"` → [`Type::Date`]
     /// - `"time"` → [`Type::Time`]
     /// - `"datetime"` → [`Type::DateTime`]
-    pub fn get_type_from_name(&self, name: &str) -> Option<Type> {
-        let str_ref = self.arena.strings.str_ref(name)?;
-        name_to_type(&self.arena, &self.options, str_ref)
+    ///
+    /// note: Registered custom types are also recognized (case-insensitive).
+    pub fn resolve_type(&self, name: &str) -> Option<Type> {
+        resolve_type_from_str(&self.arena, &self.options, name)
     }
 
     /// Provides human-readable string formatting for types.
