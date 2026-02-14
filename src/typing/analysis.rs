@@ -1,7 +1,6 @@
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use std::{borrow::Cow, collections::HashSet, mem};
-use unicase::Ascii;
+use std::{collections::HashSet, mem};
 
 use crate::arena::Arena;
 use crate::typing::{Record, Type};
@@ -49,6 +48,7 @@ pub type AnalysisResult<A> = Result<A, AnalysisError>;
 /// This structure contains the type information needed to perform static analysis
 /// on EventQL queries, including the default scope with built-in functions and
 /// the type information for event records.
+#[derive(Default)]
 pub struct AnalysisOptions {
     /// The default scope containing built-in functions and their type signatures.
     pub default_scope: Scope,
@@ -59,40 +59,7 @@ pub struct AnalysisOptions {
     /// This set allows users to register custom type names that can be used
     /// in type conversion expressions (e.g., `field AS CustomType`). Custom
     /// type names are case-insensitive.
-    pub custom_types: HashSet<Ascii<String>>,
-}
-
-impl AnalysisOptions {
-    /// Adds a custom type name to the analysis options.
-    ///
-    /// Custom types allow you to use type conversion syntax with types that are
-    /// not part of the standard EventQL type system. The type name is stored
-    /// case-insensitively.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The custom type name to register
-    ///
-    /// # Returns
-    ///
-    /// Returns `self` to allow for method chaining.
-    pub fn add_custom_type<'a>(mut self, value: impl Into<Cow<'a, str>>) -> Self {
-        match value.into() {
-            Cow::Borrowed(t) => self.custom_types.insert(Ascii::new(t.to_owned())),
-            Cow::Owned(t) => self.custom_types.insert(Ascii::new(t)),
-        };
-
-        self
-    }
-
-    /// Creates empty analysis options with no functions, no event type, and no custom types.
-    pub fn empty() -> Self {
-        Self {
-            default_scope: Scope::default(),
-            event_type_info: Type::default(),
-            custom_types: HashSet::default(),
-        }
-    }
+    pub custom_types: HashSet<StrRef>,
 }
 
 /// Represents a variable scope during static analysis.
@@ -1125,7 +1092,7 @@ impl<'a> Analysis<'a> {
                 Operator::As => {
                     let rhs = self.arena.exprs.get(binary.rhs);
                     if let Value::Id(name) = rhs.value {
-                        return if let Some(tpe) = name_to_type(self.arena, self.options, name) {
+                        return if let Some(tpe) = resolve_type(self.arena, self.options, name) {
                             // NOTE - we could check if it's safe to convert the left branch to that type
                             Ok(tpe)
                         } else {
@@ -1466,7 +1433,7 @@ impl<'a> Analysis<'a> {
                 Operator::Add | Operator::Sub | Operator::Mul | Operator::Div => Type::Number,
                 Operator::As => {
                     if let Value::Id(n) = self.arena.exprs.get(binary.rhs).value
-                        && let Some(tpe) = name_to_type(self.arena, self.options, n)
+                        && let Some(tpe) = resolve_type(self.arena, self.options, n)
                     {
                         tpe
                     } else {
@@ -1644,18 +1611,21 @@ impl Arena {
 /// - `"date"` → [`Type::Date`]
 /// - `"time"` → [`Type::Time`]
 /// - `"datetime"` → [`Type::DateTime`]
-pub(crate) fn name_to_type(
+///
+/// note: Registered custom types are also recognized (case-insensitive).
+pub(crate) fn resolve_type_from_str(
     arena: &Arena,
     opts: &AnalysisOptions,
-    name_ref: StrRef,
+    name: &str,
 ) -> Option<Type> {
-    let name = arena.strings.get(name_ref);
-
     if name.eq_ignore_ascii_case("string") {
         Some(Type::String)
-    } else if name.eq_ignore_ascii_case("int") || name.eq_ignore_ascii_case("float64") {
+    } else if name.eq_ignore_ascii_case("int")
+        || name.eq_ignore_ascii_case("float64")
+        || name.eq_ignore_ascii_case("number")
+    {
         Some(Type::Number)
-    } else if name.eq_ignore_ascii_case("boolean") {
+    } else if name.eq_ignore_ascii_case("boolean") || name.eq_ignore_ascii_case("bool") {
         Some(Type::Bool)
     } else if name.eq_ignore_ascii_case("date") {
         Some(Type::Date)
@@ -1663,13 +1633,22 @@ pub(crate) fn name_to_type(
         Some(Type::Time)
     } else if name.eq_ignore_ascii_case("datetime") {
         Some(Type::DateTime)
-    } else if opts.custom_types.contains(&Ascii::new(name.to_owned())) {
-        // ^ Sad we have to allocate here for no reason
-
-        Some(Type::Custom(name_ref))
+    } else if let Some(str_ref) = arena.strings.str_ref_no_case(name)
+        && opts.custom_types.contains(&str_ref)
+    {
+        Some(Type::Custom(str_ref))
     } else {
         None
     }
+}
+
+pub(crate) fn resolve_type(
+    arena: &Arena,
+    opts: &AnalysisOptions,
+    name_ref: StrRef,
+) -> Option<Type> {
+    let name = arena.strings.get(name_ref);
+    resolve_type_from_str(arena, opts, name)
 }
 
 pub(crate) fn display_type(arena: &Arena, tpe: Type) -> String {
