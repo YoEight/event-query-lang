@@ -297,7 +297,7 @@ pub enum Order {
 /// In `GROUP BY e.age HAVING age > 123`, this would be represented as:
 /// - `expr`: expression for `e.age`
 /// - `predicate`: `age > 123`
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct GroupBy {
     /// Expression to group by
     pub expr: ExprRef,

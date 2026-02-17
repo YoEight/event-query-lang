@@ -53,13 +53,20 @@ pub struct AnalysisOptions {
     /// The default scope containing built-in functions and their type signatures.
     pub default_scope: Scope,
     /// Type information for event records being queried.
-    pub event_type_info: Type,
+    pub default_event_type: Type,
     /// Custom types that are not defined in the EventQL reference.
     ///
     /// This set allows users to register custom type names that can be used
     /// in type conversion expressions (e.g., `field AS CustomType`). Custom
     /// type names are case-insensitive.
     pub custom_types: HashSet<StrRef>,
+
+    /// Per-data-source type overrides.
+    ///
+    /// When a query targets a named data source, this map is checked first. If a match is
+    /// found, the associated type is used instead of [`default_event_type`](AnalysisOptions::default_event_type).
+    /// Keys are case-insensitive data source names.
+    pub data_sources: FxHashMap<StrRef, Type>,
 }
 
 /// Represents a variable scope during static analysis.
@@ -307,9 +314,18 @@ impl<'a> Analysis<'a> {
     fn analyze_source(&mut self, source: Source<Raw>) -> AnalysisResult<Source<Typed>> {
         let kind = self.analyze_source_kind(source.kind)?;
         let tpe = match &kind {
-            SourceKind::Name(_) | SourceKind::Subject(_) => {
-                self.arena.types.alloc_type(self.options.event_type_info)
+            SourceKind::Name(name) => {
+                let tpe = if let Some(tpe) = self.options.data_sources.get(name).copied() {
+                    tpe
+                } else {
+                    self.options.default_event_type
+                };
+
+                self.arena.types.alloc_type(tpe)
             }
+
+            SourceKind::Subject(_) => self.arena.types.alloc_type(self.options.default_event_type),
+
             SourceKind::Subquery(query) => self.projection_type(query),
         };
 

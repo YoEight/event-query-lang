@@ -71,33 +71,78 @@ impl<'a, const N: usize> From<&'a [Type; N]> for FunArgsBuilder<'a> {
     }
 }
 
-/// Builder for configuring event type information on a [`SessionBuilder`].
+/// Builder for configuring type information on a [`SessionBuilder`].
 ///
-/// Obtained by calling [`SessionBuilder::declare_event_type`]. Use [`record`](EventTypeBuilder::record)
-/// to define a record-shaped event type or [`custom`](EventTypeBuilder::custom) for a named custom type.
+/// Obtained by calling [`SessionBuilder::declare_type`]. Use [`define_record`](EventTypeBuilder::define_record)
+/// to define a record-shaped type or [`custom`](EventTypeBuilder::custom) for a named custom type.
+/// Call [`done`](EventTypeBuilder::done) to return to the [`SessionBuilder`].
 pub struct EventTypeBuilder {
     parent: SessionBuilder,
 }
 
 impl EventTypeBuilder {
     /// Starts building a record-shaped event type with named fields.
-    pub fn record(self) -> EventTypeRecordBuilder {
+    pub fn define_record(self) -> EventTypeRecordBuilder {
         EventTypeRecordBuilder {
             inner: self,
             props: Default::default(),
         }
     }
 
-    /// Declares a custom (non-record) event type by name.
-    pub fn custom(self, _name: &str) -> SessionBuilder {
-        todo!("deal with custom type later")
+    /// Sets the default event type used when no data source-specific type is found.
+    pub fn default_event_type(mut self, tpe: Type) -> Self {
+        self.parent.options.default_event_type = tpe;
+        self
+    }
+
+    /// Registers a type for a specific named data source.
+    ///
+    /// Queries targeting `data_source` will use `tpe` for type checking instead of the default event type.
+    /// Data source names are case-insensitive.
+    pub fn data_source(mut self, data_source: &str, tpe: Type) -> Self {
+        let data_source = self.parent.arena.strings.alloc_no_case(data_source);
+
+        self.parent.options.data_sources.insert(data_source, tpe);
+
+        self
+    }
+
+    /// Declares a custom type by name.
+    pub fn custom(mut self, name: &str) -> Self {
+        let name = self.parent.arena.strings.alloc_no_case(name);
+        self.parent.options.custom_types.insert(name);
+
+        self
+    }
+
+    /// Declares a custom event type by name for as default event type.
+    pub fn custom_default_event_type(mut self, name: &str) -> Self {
+        let name = self.parent.arena.strings.alloc_no_case(name);
+        self.parent.options.custom_types.insert(name);
+
+        self.parent.options.default_event_type = Type::Custom(name);
+        self
+    }
+
+    /// Declares a custom event type by name for a data source.
+    pub fn custom_for_data_source(mut self, name: &str, data_source: &str) -> Self {
+        let name = self.parent.arena.strings.alloc_no_case(name);
+        self.parent.options.custom_types.insert(name);
+
+        self.data_source(data_source, Type::Custom(name))
+    }
+
+    /// Finalizes type configuration and returns the [`SessionBuilder`].
+    pub fn done(self) -> SessionBuilder {
+        self.parent
     }
 }
 
 /// Builder for defining the fields of a record-shaped event type.
 ///
-/// Obtained by calling [`EventTypeBuilder::record`]. Add fields with [`prop`](EventTypeRecordBuilder::prop)
-/// and finalize with [`build`](EventTypeRecordBuilder::build) to return to the [`SessionBuilder`].
+/// Obtained by calling [`EventTypeBuilder::define_record`]. Add fields with [`prop`](EventTypeRecordBuilder::prop)
+/// and finalize with [`as_default_event_type`](EventTypeRecordBuilder::as_default_event_type) or
+/// [`for_data_source`](EventTypeRecordBuilder::for_data_source) to return to the [`EventTypeBuilder`].
 pub struct EventTypeRecordBuilder {
     inner: EventTypeBuilder,
     props: FxHashMap<StrRef, Type>,
@@ -135,10 +180,28 @@ impl EventTypeRecordBuilder {
     }
 
     /// Finalizes the event record type and returns the [`SessionBuilder`].
-    pub fn build(mut self) -> SessionBuilder {
+    pub fn as_default_event_type(mut self) -> EventTypeBuilder {
         let ptr = self.inner.parent.arena.types.alloc_record(self.props);
-        self.inner.parent.options.event_type_info = Type::Record(ptr);
-        self.inner.parent
+        self.inner.parent.options.default_event_type = Type::Record(ptr);
+        self.inner
+    }
+
+    /// Finalizes the record type and registers it for a specific named data source.
+    ///
+    /// Queries targeting `data_source` will use this record type for type checking.
+    /// Data source names are case-insensitive. Returns the [`EventTypeBuilder`] to allow
+    /// chaining further type declarations.
+    pub fn for_data_source(mut self, data_source: &str) -> EventTypeBuilder {
+        let data_source = self.inner.parent.arena.strings.alloc_no_case(data_source);
+        let ptr = self.inner.parent.arena.types.alloc_record(self.props);
+
+        self.inner
+            .parent
+            .options
+            .data_sources
+            .insert(data_source, Type::Record(ptr));
+
+        self.inner
     }
 }
 
@@ -286,7 +349,7 @@ impl SessionBuilder {
     /// * `tpe` - The `Type` representing the structure of event records.
     pub fn declare_event_type_when(mut self, test: bool, tpe: Type) -> Self {
         if test {
-            self.options.event_type_info = tpe;
+            self.options.default_event_type = tpe;
         }
 
         self
@@ -300,7 +363,7 @@ impl SessionBuilder {
     /// # Arguments
     ///
     /// * `tpe` - The `Type` representing the structure of event records.
-    pub fn declare_event_type(self) -> EventTypeBuilder {
+    pub fn declare_type(self) -> EventTypeBuilder {
         EventTypeBuilder { parent: self }
     }
 
@@ -401,8 +464,10 @@ impl SessionBuilder {
             .declare_agg_func("stddev", &[Type::Number], Type::Number)
             .declare_agg_func("variance", &[Type::Number], Type::Number)
             .declare_agg_func("unique", &[Type::Unspecified], Type::Unspecified)
-            .declare_event_type()
-            .record()
+            .declare_type()
+            .data_source("eventtypes", Type::String)
+            .data_source("subjects", Type::String)
+            .define_record()
             .prop("specversion", Type::String)
             .prop("id", Type::String)
             .prop("time", Type::DateTime)
@@ -416,7 +481,8 @@ impl SessionBuilder {
             .prop("traceparent", Type::String)
             .prop("tracestate", Type::String)
             .prop("signature", Type::String)
-            .build()
+            .as_default_event_type()
+            .done()
     }
 
     /// Builds the `Session` object with the configured analysis options.
