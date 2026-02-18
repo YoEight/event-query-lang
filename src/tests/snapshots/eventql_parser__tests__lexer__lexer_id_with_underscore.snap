@@ -1,0 +1,12 @@
+---
+source: src/tests/lexer.rs
+expression: "session.tokenize(\"event_type\")"
+---
+Ok:
+  - sym:
+      Id: event_type
+    line: 1
+    col: 1
+  - sym: Eof
+    line: 1
+    col: 11

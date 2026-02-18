@@ -17,3 +17,9 @@ fn test_lexer_comment() {
     let session = Session::builder().build();
     insta::assert_yaml_snapshot!(session.tokenize("// useless comment\n "));
 }
+
+#[test]
+fn test_lexer_id_with_underscore() {
+    let session = Session::builder().build();
+    insta::assert_yaml_snapshot!(session.tokenize("event_type"));
+}
