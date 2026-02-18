@@ -1,0 +1,40 @@
+---
+source: src/tests/analysis.rs
+expression: "query.and_then(|q|\n{ session.run_static_analysis(q).map(|q| q.view(&session.arena)) })"
+---
+Ok:
+  attrs:
+    pos:
+      line: 1
+      col: 1
+  sources:
+    - binding:
+        name: event_type
+        pos:
+          line: 1
+          col: 6
+      kind:
+        Name: eventtypes
+  predicate: ~
+  group_by: ~
+  order_by:
+    expr:
+      attrs:
+        pos:
+          line: 2
+          col: 10
+      value:
+        Id: event_type
+    order: Asc
+  limit: ~
+  projection:
+    attrs:
+      pos:
+        line: 3
+        col: 14
+    value:
+      Id: event_type
+  distinct: false
+  meta:
+    project: String
+    aggregate: false
