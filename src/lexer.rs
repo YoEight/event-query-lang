@@ -11,14 +11,14 @@ use crate::error::LexerError;
 use crate::token::{Operator, Sym, Symbol, Text, Token};
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_while};
-use nom::character::complete::{alpha1, alphanumeric0, char, multispace1};
+use nom::character::complete::{alpha1, char, multispace1, satisfy};
 use nom::character::one_of;
 use nom::combinator::{eof, opt, recognize};
 use nom::error::{Error, context};
 use nom::multi::many0;
 use nom::number::complete::double;
 use nom::sequence::{delimited, pair};
-use nom::{IResult, Parser};
+use nom::{AsChar, IResult, Parser};
 
 /// Tokenize an EventQL query string.
 ///
@@ -165,31 +165,34 @@ fn operator_2(input: Text) -> IResult<Text, Token> {
 }
 
 fn ident(input: Text) -> IResult<Text, Token> {
-    recognize(pair(alpha1, alphanumeric0))
-        .map(|value: Text| {
-            let sym = if value.fragment().eq_ignore_ascii_case("and") {
-                Sym::Operator(Operator::And)
-            } else if value.fragment().eq_ignore_ascii_case("or") {
-                Sym::Operator(Operator::Or)
-            } else if value.fragment().eq_ignore_ascii_case("xor") {
-                Sym::Operator(Operator::Xor)
-            } else if value.fragment().eq_ignore_ascii_case("not") {
-                Sym::Operator(Operator::Not)
-            } else if value.fragment().eq_ignore_ascii_case("contains") {
-                Sym::Operator(Operator::Contains)
-            } else if value.fragment().eq_ignore_ascii_case("as") {
-                Sym::Operator(Operator::As)
-            } else {
-                Sym::Id(value.fragment())
-            };
+    recognize(pair(
+        alpha1,
+        many0(satisfy(|c| AsChar::is_alphanum(c) || c == '_')),
+    ))
+    .map(|value: Text| {
+        let sym = if value.fragment().eq_ignore_ascii_case("and") {
+            Sym::Operator(Operator::And)
+        } else if value.fragment().eq_ignore_ascii_case("or") {
+            Sym::Operator(Operator::Or)
+        } else if value.fragment().eq_ignore_ascii_case("xor") {
+            Sym::Operator(Operator::Xor)
+        } else if value.fragment().eq_ignore_ascii_case("not") {
+            Sym::Operator(Operator::Not)
+        } else if value.fragment().eq_ignore_ascii_case("contains") {
+            Sym::Operator(Operator::Contains)
+        } else if value.fragment().eq_ignore_ascii_case("as") {
+            Sym::Operator(Operator::As)
+        } else {
+            Sym::Id(value.fragment())
+        };
 
-            Token {
-                sym,
-                line: value.location_line(),
-                col: value.get_column() as u32,
-            }
-        })
-        .parse(input)
+        Token {
+            sym,
+            line: value.location_line(),
+            col: value.get_column() as u32,
+        }
+    })
+    .parse(input)
 }
 
 fn number(input: Text) -> IResult<Text, Token> {
