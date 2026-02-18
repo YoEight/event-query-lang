@@ -430,3 +430,27 @@ fn test_accept_valid_having_clause() {
         }))
     });
 }
+
+#[test]
+fn test_ids_in_order_by_should_pass() {
+    let mut session = Session::builder().use_stdlib().build();
+    let query = session.parse(include_str!("./resources/ids_in_order_by_should_pass.eql"));
+
+    insta::assert_yaml_snapshot!(query.and_then(|q| {
+        session
+            .run_static_analysis(q)
+            .map(|q| q.view(&session.arena))
+    }));
+}
+
+#[test]
+fn test_ids_in_group_by_should_pass() {
+    let mut session = Session::builder().use_stdlib().build();
+    let query = session.parse(include_str!("./resources/ids_in_group_by_should_pass.eql"));
+
+    insta::assert_yaml_snapshot!(query.and_then(|q| {
+        session
+            .run_static_analysis(q)
+            .map(|q| q.view(&session.arena))
+    }));
+}

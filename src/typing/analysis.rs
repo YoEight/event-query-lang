@@ -249,7 +249,7 @@ impl<'a> Analysis<'a> {
 
         if let Some(group_by) = &query.group_by {
             let node = self.arena.exprs.get(group_by.expr);
-            if !matches!(node.value, Value::Access(_)) {
+            if !matches!(node.value, Value::Access(_) | Value::Id(_)) {
                 return Err(AnalysisError::ExpectFieldLiteral(
                     node.attrs.pos.line,
                     node.attrs.pos.col,
@@ -258,7 +258,7 @@ impl<'a> Analysis<'a> {
 
             self.analyze_expr(&mut ctx, group_by.expr, Type::Unspecified)?;
 
-            if let Some(expr) = group_by.predicate.as_ref().copied() {
+            if let Some(expr) = group_by.predicate {
                 ctx.allow_agg_func = true;
                 ctx.use_agg_funcs = true;
 
@@ -282,7 +282,7 @@ impl<'a> Analysis<'a> {
         if let Some(order_by) = &query.order_by {
             self.analyze_expr(&mut ctx, order_by.expr, Type::Unspecified)?;
             let node = self.arena.exprs.get(order_by.expr);
-            if query.group_by.is_none() && !matches!(node.value, Value::Access(_)) {
+            if query.group_by.is_none() && !matches!(node.value, Value::Access(_) | Value::Id(_)) {
                 return Err(AnalysisError::ExpectFieldLiteral(
                     node.attrs.pos.line,
                     node.attrs.pos.col,

@@ -1,0 +1,3 @@
+FROM event_type IN eventtypes
+GROUP BY event_type
+PROJECT INTO unique(event_type)
