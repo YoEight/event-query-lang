@@ -204,7 +204,7 @@ fn test_typecheck_datetime_contravariance_1() {
         .parse_expr()
         .unwrap();
 
-    let event_type = session.options.event_type_info;
+    let event_type = session.options.default_event_type;
     let mut analysis = session.analysis();
 
     analysis.test_declare("e", event_type);
