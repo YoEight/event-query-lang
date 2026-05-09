@@ -1,2 +1,0 @@
-FROM e IN events
-PROJECT INTO { date: e.data.date as Foobar }

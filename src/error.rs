@@ -199,10 +199,9 @@ pub enum AnalysisError {
     #[error("{0}:{1}: expected a record")]
     ExpectRecordLiteral(u32, u32),
 
-    /// When a custom type (meaning a type not supported by EventQL by default) is used but
-    /// not registered in the `AnalysisOptions` custom type set.
-    #[error("{0}:{1}: unsupported custom type '{2}'")]
-    UnsupportedCustomType(u32, u32, String),
+    /// When a type is not supported by EventQL.
+    #[error("{0}:{1}: unknown type '{2}'")]
+    UnknownType(u32, u32, String),
 
     /// A function was called with the wrong number of arguments.
     ///

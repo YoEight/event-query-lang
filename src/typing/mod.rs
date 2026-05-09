@@ -1,4 +1,3 @@
-use crate::StrRef;
 use serde::Serialize;
 
 pub mod analysis;
@@ -73,23 +72,6 @@ pub enum Type {
     ///
     /// Used when a field is explicitly converted to a datetime using the `AS DATETIME` syntax.
     DateTime,
-    /// Custom type not defined in the EventQL reference
-    ///
-    /// Used when a field is converted to a custom type registered in the analysis options.
-    /// The string contains the custom type name as it appears in the query.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use eventql_parser::Session;
-    ///
-    /// let mut session = Session::builder()
-    ///     .declare_custom_type("CustomTimestamp")
-    ///     .build();
-    /// let query = session.parse("FROM e IN events PROJECT INTO { ts: e.data.timestamp as CustomTimestamp }").unwrap();
-    /// let typed_query = session.run_static_analysis(query).unwrap();
-    /// ```
-    Custom(StrRef),
 }
 
 impl Type {

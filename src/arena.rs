@@ -39,13 +39,6 @@ impl StringArena {
         self.cache.get(&self.hasher.hash_one(value)).copied()
     }
 
-    /// Like ['str_ref'] but case-insensitive
-    pub fn str_ref_no_case(&self, value: &str) -> Option<StrRef> {
-        self.cache
-            .get(&self.hasher.hash_one(Ascii::new(value)))
-            .copied()
-    }
-
     /// Interns a string using case-insensitive hashing.
     ///
     /// Two strings that differ only in ASCII case will resolve to the same [`StrRef`].
@@ -66,11 +59,6 @@ impl StringArena {
     /// Retrieves the string associated with the given [`StrRef`].
     pub fn get(&self, key: StrRef) -> &str {
         &self.slots[key.0]
-    }
-
-    /// Compares two interned strings for case-insensitive ASCII equality.
-    pub fn eq_ignore_ascii_case(&self, ka: StrRef, kb: StrRef) -> bool {
-        self.get(ka).eq_ignore_ascii_case(self.get(kb))
     }
 }
 

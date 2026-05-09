@@ -1,6 +1,6 @@
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use std::{collections::HashSet, mem};
+use std::mem;
 
 use crate::arena::Arena;
 use crate::typing::{Record, Type};
@@ -54,13 +54,6 @@ pub struct AnalysisOptions {
     pub default_scope: Scope,
     /// Type information for event records being queried.
     pub default_event_type: Type,
-    /// Custom types that are not defined in the EventQL reference.
-    ///
-    /// This set allows users to register custom type names that can be used
-    /// in type conversion expressions (e.g., `field AS CustomType`). Custom
-    /// type names are case-insensitive.
-    pub custom_types: HashSet<StrRef>,
-
     /// Per-data-source type overrides.
     ///
     /// When a query targets a named data source, this map is checked first. If a match is
@@ -171,17 +164,6 @@ impl<'a> Analysis<'a> {
     /// in the `AnalysisOptions`.
     pub fn scope(&self) -> &Scope {
         &self.scope
-    }
-
-    /// Returns a mutable reference to the current scope.
-    ///
-    /// This allows you to modify the scope by adding or removing variable bindings.
-    /// This is useful when you need to set up custom type environments before
-    /// analyzing expressions. Note that this only provides access to local variable
-    /// bindings; global definitions like built-in functions are managed through
-    /// `AnalysisOptions` and cannot be modified via the scope.
-    pub fn scope_mut(&mut self) -> &mut Scope {
-        &mut self.scope
     }
 
     fn enter_scope(&mut self) {
@@ -1108,11 +1090,11 @@ impl<'a> Analysis<'a> {
                 Operator::As => {
                     let rhs = self.arena.exprs.get(binary.rhs);
                     if let Value::Id(name) = rhs.value {
-                        return if let Some(tpe) = resolve_type(self.arena, self.options, name) {
+                        return if let Some(tpe) = resolve_type(self.arena, name) {
                             // NOTE - we could check if it's safe to convert the left branch to that type
                             Ok(tpe)
                         } else {
-                            Err(AnalysisError::UnsupportedCustomType(
+                            Err(AnalysisError::UnknownType(
                                 rhs.attrs.pos.line,
                                 rhs.attrs.pos.col,
                                 self.arena.strings.get(name).to_owned(),
@@ -1449,7 +1431,7 @@ impl<'a> Analysis<'a> {
                 Operator::Add | Operator::Sub | Operator::Mul | Operator::Div => Type::Number,
                 Operator::As => {
                     if let Value::Id(n) = self.arena.exprs.get(binary.rhs).value
-                        && let Some(tpe) = resolve_type(self.arena, self.options, n)
+                        && let Some(tpe) = resolve_type(self.arena, n)
                     {
                         tpe
                     } else {
@@ -1519,9 +1501,7 @@ impl Arena {
             (Type::Date, Type::DateTime) => Ok(Type::Date),
             (Type::DateTime, Type::Time) => Ok(Type::Time),
             (Type::Time, Type::DateTime) => Ok(Type::Time),
-            (Type::Custom(a), Type::Custom(b)) if self.strings.eq_ignore_ascii_case(a, b) => {
-                Ok(Type::Custom(a))
-            }
+
             (Type::Array(a), Type::Array(b)) => {
                 let a = self.types.get_type(a);
                 let b = self.types.get_type(b);
@@ -1610,12 +1590,11 @@ impl Arena {
 
 /// Converts a type name string to its corresponding [`Type`] variant.
 ///
-/// This function performs case-insensitive matching for built-in type names and checks
-/// against custom types defined in the analysis options.
+/// This function performs case-insensitive matching for built-in type names
 ///
 /// # Returns
 ///
-/// * `Some(Type)` - If the name matches a built-in type or custom type
+/// * `Some(Type)` - If the name matches a built-in type
 /// * `None` - If the name doesn't match any known type
 ///
 /// # Built-in Type Mappings
@@ -1627,13 +1606,7 @@ impl Arena {
 /// - `"date"` → [`Type::Date`]
 /// - `"time"` → [`Type::Time`]
 /// - `"datetime"` → [`Type::DateTime`]
-///
-/// note: Registered custom types are also recognized (case-insensitive).
-pub(crate) fn resolve_type_from_str(
-    arena: &Arena,
-    opts: &AnalysisOptions,
-    name: &str,
-) -> Option<Type> {
+pub(crate) fn resolve_type_from_str(name: &str) -> Option<Type> {
     if name.eq_ignore_ascii_case("string") {
         Some(Type::String)
     } else if name.eq_ignore_ascii_case("int")
@@ -1649,22 +1622,14 @@ pub(crate) fn resolve_type_from_str(
         Some(Type::Time)
     } else if name.eq_ignore_ascii_case("datetime") {
         Some(Type::DateTime)
-    } else if let Some(str_ref) = arena.strings.str_ref_no_case(name)
-        && opts.custom_types.contains(&str_ref)
-    {
-        Some(Type::Custom(str_ref))
     } else {
         None
     }
 }
 
-pub(crate) fn resolve_type(
-    arena: &Arena,
-    opts: &AnalysisOptions,
-    name_ref: StrRef,
-) -> Option<Type> {
+pub(crate) fn resolve_type(arena: &Arena, name_ref: StrRef) -> Option<Type> {
     let name = arena.strings.get(name_ref);
-    resolve_type_from_str(arena, opts, name)
+    resolve_type_from_str(name)
 }
 
 pub(crate) fn display_type(arena: &Arena, tpe: Type) -> String {
@@ -1678,7 +1643,6 @@ pub(crate) fn display_type(arena: &Arena, tpe: Type) -> String {
             Type::Date => buffer.push_str("Date"),
             Type::Time => buffer.push_str("Time"),
             Type::DateTime => buffer.push_str("DateTime"),
-            Type::Custom(n) => buffer.push_str(arena.strings.get(n)),
 
             Type::Array(tpe) => {
                 buffer.push_str("[]");
