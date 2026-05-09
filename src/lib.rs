@@ -19,6 +19,7 @@ use crate::prelude::{
     Analysis, AnalysisOptions, FunArgs, Scope, Typed, display_type, parse, resolve_type_from_str,
 };
 use crate::token::Token;
+use crate::typing::TypeRef;
 pub use ast::*;
 use rustc_hash::FxHashMap;
 pub use typing::Type;
@@ -157,9 +158,21 @@ impl<'a> EventTypeRecordBuilder<'a> {
         self.inner
     }
 
-    pub fn build(self) -> Type {
+    /// Creates a record type and returns it with its registered type reference.
+    ///
+    /// Use the returned [`Type`] where an API expects the record type directly. Use the
+    /// returned [`TypeRef`] when building another type that needs to point at this record,
+    /// such as [`Type::Array`].
+    ///
+    /// The [`TypeRef`] belongs to the current [`SessionBuilder`]'s arena and should only
+    /// be used with types configured through the same builder.
+    pub fn build(self) -> (Type, TypeRef) {
         let ptr = self.inner.parent.arena.types.alloc_record(self.props);
-        Type::Record(ptr)
+        let tpe = Type::Record(ptr);
+
+        let type_ref = self.inner.parent.arena.types.register_type(tpe);
+
+        (tpe, type_ref)
     }
 }
 
