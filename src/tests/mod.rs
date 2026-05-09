@@ -234,7 +234,6 @@ pub enum TypeView {
     Date,
     Time,
     DateTime,
-    Custom(String),
     Array(Box<TypeView>),
     Record(BTreeMap<String, TypeView>),
     App {
@@ -284,7 +283,6 @@ fn project_type(arena: &Arena, tpe: Type) -> TypeView {
         Type::Date => TypeView::Date,
         Type::Time => TypeView::Time,
         Type::DateTime => TypeView::DateTime,
-        Type::Custom(key) => TypeView::Custom(arena.strings.get(key).to_owned()),
 
         Type::Array(arr) => {
             TypeView::Array(Box::new(project_type(arena, arena.types.get_type(arr))))

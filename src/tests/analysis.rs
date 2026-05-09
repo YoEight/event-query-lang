@@ -98,31 +98,6 @@ fn test_analyze_valid_type_conversion() {
 }
 
 #[test]
-fn test_analyze_invalid_type_conversion_custom_type() {
-    let mut session = Session::builder().use_stdlib().build();
-    let query = session.parse(include_str!("./resources/type_conversion_custom_type.eql"));
-    insta::assert_yaml_snapshot!(query.and_then(|q| {
-        session
-            .run_static_analysis(q)
-            .map(|q| q.view(&session.arena))
-    }));
-}
-
-#[test]
-fn test_analyze_valid_type_conversion_custom_type() {
-    let mut session = Session::builder()
-        .use_stdlib()
-        .declare_custom_type("Foobar")
-        .build();
-    let query = session.parse(include_str!("./resources/type_conversion_custom_type.eql"));
-    insta::assert_yaml_snapshot!(query.and_then(|q| {
-        session
-            .run_static_analysis(q)
-            .map(|q| q.view(&session.arena))
-    }));
-}
-
-#[test]
 fn test_analyze_valid_type_conversion_weird_case() {
     let mut session = Session::builder().use_stdlib().build();
     let query = session.parse(include_str!(
@@ -133,6 +108,25 @@ fn test_analyze_valid_type_conversion_weird_case() {
             .run_static_analysis(q)
             .map(|q| q.view(&session.arena))
     }));
+}
+
+#[test]
+fn test_analyze_unknown_type_conversion() {
+    let mut session = Session::builder().use_stdlib().build();
+    let query = session.parse("FROM e IN events PROJECT INTO { value: e.data.value AS Foobar }");
+
+    insta::assert_yaml_snapshot!(query.and_then(|q| {
+        session
+            .run_static_analysis(q)
+            .map(|q| q.view(&session.arena))
+    }), @r###"
+    Err:
+      Analysis:
+        UnknownType:
+          - 1
+          - 56
+          - Foobar
+    "###);
 }
 
 #[test]
