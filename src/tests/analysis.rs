@@ -448,3 +448,28 @@ fn test_ids_in_group_by_should_pass() {
             .map(|q| q.view(&session.arena))
     }));
 }
+
+#[test]
+fn test_project_event_decls() {
+    let mut builder = Session::builder().use_stdlib();
+
+    builder
+        .declare_type()
+        .define_record()
+        .prop("id", Type::String)
+        .prop("name", Type::String)
+        .prop("version", Type::String)
+        .prop("summary", Type::String)
+        .prop("schema", Type::Unspecified)
+        .for_data_source("command_decls");
+
+    let mut session = builder.build();
+
+    let query = session.parse(include_str!("./resources/project_event_decls.eql"));
+
+    insta::assert_yaml_snapshot!(query.and_then(|q| {
+        session
+            .run_static_analysis(q)
+            .map(|q| q.view(&session.arena))
+    }));
+}

@@ -1,0 +1,2 @@
+FROM c IN command_decls
+PROJECT INTO c.schema.properties

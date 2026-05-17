@@ -8,7 +8,10 @@ pub struct TypeRef(pub(crate) usize);
 
 /// A reference to a record definition stored in the [`TypeArena`](crate::arena::TypeArena).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
-pub struct Record(pub(crate) usize);
+pub struct Record {
+    pub(crate) id: usize,
+    pub(crate) open: bool,
+}
 
 /// A reference to a function argument type list stored in the [`TypeArena`](crate::arena::TypeArena).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
