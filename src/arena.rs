@@ -213,10 +213,13 @@ impl TypeArena {
     /// Allocates a fresh copy of a type. For records, this clones the record definition.
     pub fn alloc_type(&mut self, tpe: Type) -> Type {
         if let Type::Record(rec) = tpe {
-            let key = Record(self.records.len());
+            let key = Record {
+                id: self.records.len(),
+                open: rec.open,
+            };
             // TODO: technically, a deep-clone is needed here, where properties that point to
             // records should also be allocated as well.
-            self.records.push(self.records[rec.0].clone());
+            self.records.push(self.records[rec.id].clone());
 
             return Type::Record(key);
         }
@@ -231,7 +234,21 @@ impl TypeArena {
 
     /// Allocates a new record type from a map of field names to types.
     pub fn alloc_record(&mut self, record: FxHashMap<StrRef, Type>) -> Record {
-        let key = Record(self.records.len());
+        let key = Record {
+            id: self.records.len(),
+            open: false,
+        };
+        self.records.push(record);
+        key
+    }
+
+    /// Allocates a new open record type from a map of field names to types. An open record type is
+    /// a record type that doesn't fail typechecking if we try to access a field that isn't defined yet.
+    pub fn alloc_open_record(&mut self, record: FxHashMap<StrRef, Type>) -> Record {
+        let key = Record {
+            id: self.records.len(),
+            open: true,
+        };
         self.records.push(record);
         key
     }
@@ -259,7 +276,7 @@ impl TypeArena {
 
     /// Returns the field map for the given record.
     pub fn get_record(&self, key: Record) -> &FxHashMap<StrRef, Type> {
-        &self.records[key.0]
+        &self.records[key.id]
     }
 
     /// Returns the argument type slice for the given [`ArgsRef`].
@@ -279,7 +296,7 @@ impl TypeArena {
 
     /// Returns the type of a field in the given record, or `None` if the field doesn't exist.
     pub fn record_get(&self, record: Record, field: StrRef) -> Option<Type> {
-        self.records[record.0].get(&field).copied()
+        self.records[record.id].get(&field).copied()
     }
 
     /// Checks whether two records have the exact same set of field names.
@@ -304,19 +321,19 @@ impl TypeArena {
         true
     }
 
-    /// Creates an empty record type.
-    pub fn instantiate_record(&mut self) -> Record {
-        self.alloc_record(FxHashMap::default())
+    /// Creates an empty open record type.
+    pub fn instantiate_open_record(&mut self) -> Record {
+        self.alloc_open_record(FxHashMap::default())
     }
 
     /// Sets the type of a field in the given record, inserting or updating as needed.
     pub fn record_set(&mut self, record: Record, field: StrRef, value: Type) {
-        self.records[record.0].insert(field, value);
+        self.records[record.id].insert(field, value);
     }
 
     /// Returns the number of fields in the given record.
     pub fn record_len(&self, record: Record) -> usize {
-        self.records[record.0].len()
+        self.records[record.id].len()
     }
 }
 

@@ -1136,8 +1136,6 @@ impl<'a> Analysis<'a> {
     ) -> AnalysisResult<Type> {
         struct State {
             depth: u8,
-            /// When true means we are into dynamically type object.
-            dynamic: bool,
             definition: Def,
         }
 
@@ -1145,7 +1143,6 @@ impl<'a> Analysis<'a> {
             fn new(definition: Def) -> Self {
                 Self {
                     depth: 0,
-                    dynamic: false,
                     definition,
                 }
             }
@@ -1183,7 +1180,7 @@ impl<'a> Analysis<'a> {
                         }
                     } else if let Some(tpe) = scope.get_mut(id) {
                         if matches!(tpe, Type::Unspecified) {
-                            let record = arena.types.instantiate_record();
+                            let record = arena.types.instantiate_open_record();
                             *tpe = Type::Record(record);
 
                             Ok(State::new(Def::User {
@@ -1217,23 +1214,12 @@ impl<'a> Analysis<'a> {
                     }
                 }
                 Value::Access(access) => {
-                    let mut state = go(scope, arena, sys, access.target)?;
-
-                    // TODO - we should consider make that field and depth configurable.
-                    let is_data_field =
-                        state.depth == 0 && arena.strings.get(access.field) == "data";
-
-                    // TODO - we should consider make that behavior configurable.
-                    // the `data` property is where the JSON payload is located, which means
-                    // we should be lax if a property is not defined yet.
-                    if !state.dynamic && is_data_field {
-                        state.dynamic = true;
-                    }
+                    let state = go(scope, arena, sys, access.target)?;
 
                     match state.definition {
                         Def::User { parent, tpe } => {
-                            if matches!(tpe, Type::Unspecified) && state.dynamic {
-                                let record = arena.types.instantiate_record();
+                            if matches!(tpe, Type::Unspecified) {
+                                let record = arena.types.instantiate_open_record();
                                 arena
                                     .types
                                     .record_set(record, access.field, Type::Unspecified);
@@ -1256,7 +1242,6 @@ impl<'a> Analysis<'a> {
                                         },
                                         tpe: Type::Unspecified,
                                     },
-                                    ..state
                                 });
                             } else if let Type::Record(record) = tpe {
                                 return if let Some(tpe) =
@@ -1271,11 +1256,9 @@ impl<'a> Analysis<'a> {
                                             },
                                             tpe,
                                         },
-                                        ..state
                                     })
                                 } else {
-                                    // TODO - that test seems useless because it can't be the data field and not be dynamic
-                                    if state.dynamic || is_data_field {
+                                    if record.open {
                                         arena.types.record_set(
                                             record,
                                             access.field,
@@ -1290,7 +1273,6 @@ impl<'a> Analysis<'a> {
                                                 },
                                                 tpe: Type::Unspecified,
                                             },
-                                            ..state
                                         });
                                     }
 
@@ -1310,11 +1292,10 @@ impl<'a> Analysis<'a> {
                         }
 
                         Def::System(tpe) => {
-                            if matches!(tpe, Type::Unspecified) && state.dynamic {
+                            if matches!(tpe, Type::Unspecified) {
                                 return Ok(State {
                                     depth: state.depth + 1,
                                     definition: Def::System(Type::Unspecified),
-                                    ..state
                                 });
                             }
 
@@ -1323,7 +1304,6 @@ impl<'a> Analysis<'a> {
                                     return Ok(State {
                                         depth: state.depth + 1,
                                         definition: Def::System(field),
-                                        ..state
                                     });
                                 }
 
@@ -1511,8 +1491,8 @@ impl Arena {
             }
 
             (Type::Record(a), Type::Record(b)) if self.types.records_have_same_keys(a, b) => {
-                let mut map_a = mem::take(&mut self.types.records[a.0]);
-                let mut map_b = mem::take(&mut self.types.records[b.0]);
+                let mut map_a = mem::take(&mut self.types.records[a.id]);
+                let mut map_b = mem::take(&mut self.types.records[b.id]);
 
                 for (bk, bv) in map_b.iter_mut() {
                     let av = map_a.get_mut(bk).unwrap();
@@ -1522,8 +1502,8 @@ impl Arena {
                     *bv = new_tpe;
                 }
 
-                self.types.records[a.0] = map_a;
-                self.types.records[b.0] = map_b;
+                self.types.records[a.id] = map_a;
+                self.types.records[b.id] = map_b;
 
                 Ok(Type::Record(a))
             }
